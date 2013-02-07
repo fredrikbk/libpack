@@ -37,6 +37,16 @@ int compare_buffers(size_t size, char** mpi_inbuf, char** farc_inbuf, char** mpi
 
 }
 
+int inspect_buffers(size_t size, char** mpi_inbuf, char** farc_inbuf, char** mpi_outbuf, char** farc_outbuf) {
+
+    for (int i=0; i<size; i++) {
+        printf("mpi_inbuf[%i] = %i farc_inbuf[%i] = %i mpi_outbuf[%i] = %i farc_outbuf[%i] = %i\n", i, (*mpi_inbuf)[i], i, (*farc_inbuf)[i], i, (*mpi_outbuf)[i], i, (*farc_outbuf)[i]);
+    }   
+
+    return 0; 
+
+}
+
 void test_start(std::string str) {
     printf("%100s", str.c_str());
 }

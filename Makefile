@@ -4,14 +4,15 @@ LDLIBS=$(shell llvm-config --libs all)
 LDFLAGS=$(shell llvm-config --ldflags) -lmpich
 CPPFLAGS=-g3 $(shell llvm-config --cppflags) -I/usr/include/mpi 
 
-BINARIES=$(shell ls *.cpp | sed -e 's/.cpp//';)
-#BINARIES=test_400_vector
+all: interposer.a
 
-all: $(BINARIES)
+interposer.a: interposer.o
+	 ar r $@ interposer.o
+	 ranlib $@
 
 clean:
 	rm -f $(BINARIES)
 
 show_ir:
 	clang -emit-llvm -c input.c -o tmp.bc
-	llc-3.1 -march=cpp tmp.bc -o output.cpp
+	llc -march=cpp tmp.bc -o output.cpp
