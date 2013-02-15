@@ -18,8 +18,8 @@ int main(int argc, char** argv) {
     FARC_DDT_Init();
     FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_INT);
     FARC_Datatype* t2 = new FARC_HVectorDatatype(t1, 2, 3, 5*sizeof(int));
-    int ddt_handle = FARC_DDT_Commit(t2);
-    FARC_DDT_Pack(farc_inbuf, farc_outbuf, ddt_handle, 2);
+    FARC_DDT_Commit(t2);
+    FARC_DDT_Pack(farc_inbuf, farc_outbuf, t2, 2);
 
     MPI_Datatype newtype;
     MPI_Type_hvector(2, 3, 5*sizeof(int), MPI_INT, &newtype);

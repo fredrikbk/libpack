@@ -24,7 +24,7 @@
 
 using namespace llvm;
 
-static std::vector<void*> Packers;
+static Function* func; // printf function for debugging
 static Module *TheModule;
 static IRBuilder<> Builder(getGlobalContext());
 static std::map<std::string, Value*> NamedValues;
@@ -74,15 +74,10 @@ int FARC_PrimitiveDatatype::getSize() {
 
 Value* FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
                             
-    /** for debugging  
-    std::vector<llvm::Type*> printf_arg_types;
-    printf_arg_types.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    FunctionType* printf_type = FunctionType::get(Type::getInt32Ty(getGlobalContext()), printf_arg_types, true);
-    Function *func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
-    Value *fmt_ptr1 = Builder.CreateGlobalStringPtr("Before in PTR: %p Out PTR: %p\n\0");
+    /** for debugging */ 
+    //Value *fmt_ptr1 = Builder.CreateGlobalStringPtr("in PTR: %p out PTR: %p size: %i\n\n\0");
     // now we can print as follows:
-    CallInst *call = Builder.CreateCall3(func, fmt_ptr1, inbuf, outbuf);
-*/
+    //CallInst *call = Builder.CreateCall3(func, fmt_ptr1, inbuf, outbuf);
 
     Value* inbuf = Builder.CreateLoad(inbuf_ptr);
     Value* outbuf = Builder.CreateLoad(outbuf_ptr);
@@ -92,7 +87,7 @@ Value* FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Va
     Value* contig_size = Builder.CreateMul(contig_size_type, incount64);
 
     Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_size, 1);
-//    CallInst *call = Builder.CreateCall4(func, fmt_ptr1, inbuf, outbuf, contig_size);
+    //CallInst *call = Builder.CreateCall4(func, fmt_ptr1, inbuf, outbuf, contig_size);
 
     Value* outbuf_addr_cvi = Builder.CreatePtrToInt(outbuf, Type::getInt64Ty(getGlobalContext()));
     Value* outbuf_addr = Builder.CreateAdd(outbuf_addr_cvi, contig_size);
@@ -197,6 +192,7 @@ FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(MPI_Datatype type) {
     this->Type = type;
 
     if (Type == MPI_BYTE)   this->Extend = 1;
+    if (Type == MPI_CHAR)   this->Extend = 1;
     if (Type == MPI_DOUBLE) this->Extend = sizeof(double);
     if (Type == MPI_INT)    this->Extend = sizeof(int);
     //TODO add more
@@ -436,13 +432,12 @@ Value* FARC_HVectorDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Valu
 
 Value* FARC_HVectorDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
 
-    /** for debugging **   
+    /** for debugging *   
     std::vector<llvm::Type*> printf_arg_types;
     printf_arg_types.push_back(Type::getInt8PtrTy(getGlobalContext()));
     FunctionType* printf_type = FunctionType::get(Type::getInt32Ty(getGlobalContext()), printf_arg_types, true);
     Function *func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
-    Value *fmt_ptr = Builder.CreateGlobalStringPtr("stride to add: %i\n\0");
-    Value *fmt_ptr2 = Builder.CreateGlobalStringPtr("restore stride\n\0");
+    Value *fmt_ptr = Builder.CreateGlobalStringPtr("copy blocklen\n\0");
     // now we can print as follows:
     //llvm::CallInst *call = builder.CreateCall2(func, fmt_ptr, ValueToPrint);
     */
@@ -490,11 +485,12 @@ Value* FARC_HVectorDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Va
     // store oldout, so that we can calc stride
     Value* oldout = Builder.CreateLoad(outbuf_ptr);
                             
-    Basetype->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen, false)), outbuf_ptr);
+   // llvm::CallInst *call = Builder.CreateCall(func, fmt_ptr);
+    Basetype->Codegen_Unpack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen, false)), outbuf_ptr);
                             
     Value* newout = Builder.CreateLoad(outbuf_ptr);
                             
-    // *imbuf += stride - (newin - oldin)
+    // *outbuf += stride - (newout - oldout)
     Value* oldout_int = Builder.CreatePtrToInt(oldout, Type::getInt64Ty(getGlobalContext()));
     Value* newout_int = Builder.CreatePtrToInt(newout, Type::getInt64Ty(getGlobalContext()));
     Value* written_bytes = Builder.CreateSub(newout_int, oldout_int);
@@ -528,7 +524,7 @@ Value* FARC_HVectorDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Va
     Variable_inner->addIncoming(NextVar_inner, LoopEnd_inner_BB);
                             
     // Remove the stride that was added in the last iteration
-    Builder.CreateStore(newout, inbuf_ptr);
+    Builder.CreateStore(newout, outbuf_ptr);
                             
     /* llop epilog of outer loop*/
                             
@@ -801,7 +797,7 @@ Value* FARC_VectorDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Val
     Variable_inner->addIncoming(NextVar_inner, LoopEnd_inner_BB);
                             
     // Remove the stride that was added in the last iteration
-    Builder.CreateStore(newout, inbuf_ptr);
+    Builder.CreateStore(newout, outbuf_ptr);
                             
     /* llop epilog of outer loop*/
                             
@@ -829,8 +825,379 @@ Value* FARC_VectorDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Val
 
 }
 
+/* Class for struct types */
+class FARC_StructDatatype : public FARC_Datatype {
+
+    int Count;
+    std::vector<FARC_Datatype*> Types;
+    std::vector<int> Blocklen;
+    std::vector<int> Displ;
+
+    public:
+    FARC_StructDatatype(int count, int* blocklen, long*  displ, FARC_Datatype** types);
+    Value *Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf);
+    Value *Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf);
+    int getExtend();
+    int getSize();
+
+};
+
+FARC_StructDatatype::FARC_StructDatatype(int count, int* blocklen, long*  displ, FARC_Datatype** types) {
+
+    this->Count = count;
+    for (int i=0; i<count; i++) Blocklen.push_back(blocklen[i]);
+    for (int i=0; i<count; i++) Displ.push_back(displ[i]);
+    for (int i=0; i<count; i++) Types.push_back(types[i]);
+
+}
+
+int FARC_StructDatatype::getExtend() {
+
+    if (this->Count == 0) return 0;
+
+    int lb = this->Displ[0];
+    int ub = this->Displ[0] + this->Types[0]->getExtend() * this->Blocklen[0];
+    for (int i=0; i<this->Count; i++) {
+        int tmp_ub = this->Displ[i] + this->Types[i]->getExtend() * this->Blocklen[i];
+        int tmp_lb = this->Displ[i];
+        if (tmp_ub > ub) ub = tmp_ub;
+        if (tmp_lb < lb) lb = tmp_lb;
+    }
+
+    return ub-lb;
+
+}
+
+int FARC_StructDatatype::getSize() {
+
+    int sum = 0;
+    for (int i=0; i<this->Count; i++) {
+        sum += this->Types[i]->getSize() * this->Blocklen[i];
+    }
+
+    return sum;
+
+}
+
+Value* FARC_StructDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
+
+    // start value for the loop over incount
+    Value* CounterValue = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
+    // save inbuf ptr so that we can calculate inbuf = inbuf_orig + i * extend for each iter over incount
+    Value* inbuf_orig = Builder.CreateLoad(inbuf_ptr);
+    Value* inbuf_orig_int = Builder.CreatePtrToInt(inbuf_orig, Type::getInt64Ty(getGlobalContext()));
+    Value* extend = ConstantInt::get(getGlobalContext(), APInt(32, this->getExtend(), false));
+                            
+    // Make the new basic block for the loop header, inserting after current block.
+    Function* TheFunction = Builder.GetInsertBlock()->getParent();
+    BasicBlock* PreheaderBB = Builder.GetInsertBlock();
+    BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
+                            
+    // Insert an explicit fall through from the current block to the LoopBB.
+    Builder.CreateBr(LoopBB);
+                            
+    // Start insertion in LoopBB.
+    Builder.SetInsertPoint(LoopBB);
+                            
+    // Start the PHI node with an entry for Start.
+    PHINode* Variable = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
+    Variable->addIncoming(CounterValue, PreheaderBB);
+                            
+    // Emit the body of the loop:
+
+    //inbuf = inbuf_old + incount_i * extend
+    Value* incnt_i_mul_ext_32 = Builder.CreateMul(Variable, extend);
+    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, Type::getInt64Ty(getGlobalContext()));
+    Value* inbuf_new_int = Builder.CreateAdd(inbuf_orig_int, incnt_i_mul_ext_64);
+
+    for (int i=0; i<this->Count; i++) {
+        // inbuf_displ = inptr_new + displ[i]
+        Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
+        Value* inbuf_displ_int = Builder.CreateAdd(inbuf_new_int, displ_i);
+        Value* inbuf_displ = Builder.CreateIntToPtr(inbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
+        Builder.CreateStore(inbuf_displ, inbuf_ptr);
+        this->Types[i]->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
+    }
+
+    // Emit the step value. 
+    Value* StepVal = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
+    Value* NextVar = Builder.CreateAdd(Variable, StepVal, "nextvar");
+                            
+    // check if we are finished
+    Value* EndCond = Builder.CreateICmpNE(NextVar, incount, "loopcond");
+
+    // Create the "after loop" block and insert it.
+    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
+    BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+
+    // Insert the conditional branch into the end of LoopEndBB.
+    Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+                            
+    // Any new code will be inserted in AfterBB.
+    Builder.SetInsertPoint(AfterBB);
+                            
+    // Add a new entry to the PHI node for the backedge.
+    Variable->addIncoming(NextVar, LoopEndBB);
+
+    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+
+}
+
+Value* FARC_StructDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
+
+    // start value for the loop over incount
+    Value* CounterValue = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
+    // save outbuf ptr so that we can calculate outbuf = outbuf_orig + i * extend for each iter over incount
+    Value* outbuf_orig = Builder.CreateLoad(outbuf_ptr);
+    Value* outbuf_orig_int = Builder.CreatePtrToInt(outbuf_orig, Type::getInt64Ty(getGlobalContext()));
+    Value* extend = ConstantInt::get(getGlobalContext(), APInt(32, this->getExtend(), false));
+                            
+    // Make the new basic block for the loop header, inserting after current block.
+    Function* TheFunction = Builder.GetInsertBlock()->getParent();
+    BasicBlock* PreheaderBB = Builder.GetInsertBlock();
+    BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
+                            
+    // Insert an explicit fall through from the current block to the LoopBB.
+    Builder.CreateBr(LoopBB);
+                            
+    // Start insertion in LoopBB.
+    Builder.SetInsertPoint(LoopBB);
+                            
+    // Start the PHI node with an entry for Start.
+    PHINode* Variable = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
+    Variable->addIncoming(CounterValue, PreheaderBB);
+                            
+    // Emit the body of the loop:
+
+    //outbuf = outbuf_old + incount_i * extend
+    Value* incnt_i_mul_ext_32 = Builder.CreateMul(Variable, extend);
+    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, Type::getInt64Ty(getGlobalContext()));
+    Value* outbuf_new_int = Builder.CreateAdd(outbuf_orig_int, incnt_i_mul_ext_64);
+
+    for (int i=0; i<this->Count; i++) {
+        // outbuf_displ = inptr_new + displ[i]
+        Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
+        Value* outbuf_displ_int = Builder.CreateAdd(outbuf_new_int, displ_i);
+        Value* outbuf_displ = Builder.CreateIntToPtr(outbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
+        Builder.CreateStore(outbuf_displ, outbuf_ptr);
+        this->Types[i]->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
+    }
+
+    // Emit the step value. 
+    Value* StepVal = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
+    Value* NextVar = Builder.CreateAdd(Variable, StepVal, "nextvar");
+                            
+    // check if we are finished
+    Value* EndCond = Builder.CreateICmpNE(NextVar, incount, "loopcond");
+
+    // Create the "after loop" block and insert it.
+    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
+    BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+
+    // Insert the conditional branch into the end of LoopEndBB.
+    Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+                            
+    // Any new code will be inserted in AfterBB.
+    Builder.SetInsertPoint(AfterBB);
+                            
+    // Add a new entry to the PHI node for the backedge.
+    Variable->addIncoming(NextVar, LoopEndBB);
+
+    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+
+}
+
+/* Class for hindexed types */
+class FARC_HIndexedDatatype : public FARC_Datatype {
+
+    int Count;
+    FARC_Datatype* Basetype;
+    std::vector<int> Blocklen;
+    std::vector<int> Displ;
+
+    public:
+    FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype);
+    Value *Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf);
+    Value *Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf);
+    int getExtend();
+    int getSize();
+
+};
+
+FARC_HIndexedDatatype::FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype) {
+
+    this->Count = count;
+    this->Basetype = basetype;
+    for (int i=0; i<count; i++) this->Blocklen.push_back(blocklen[i]);
+    for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
+
+}
+
+int FARC_HIndexedDatatype::getExtend() {
+
+    if (this->Count == 0) return 0;
+
+    int bext = this->Basetype->getExtend();
+
+    int ub = this->Displ[0] + bext * this->Blocklen[0];
+    int lb = this->Displ[0];
+
+    for (int i=0; i<this->Count; i++) {
+        int tmp_ub = this->Displ[i] + bext * this->Blocklen[i];
+        int tmp_lb = this->Displ[i];
+        if (tmp_ub > ub) ub = tmp_ub;
+        if (tmp_lb < lb) lb = tmp_lb;
+    }
+
+    return ub - lb;
+
+}
+
+int FARC_HIndexedDatatype::getSize() {
+
+    int sum = 0;
+    int bsize = this->Basetype->getSize();
+    for (int i=0; i<this->Count; i++) {
+        sum += bsize * this->Blocklen[i];
+    }
+
+    return sum;
+
+}
+
+Value* FARC_HIndexedDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
+
+    // start value for the loop over incount
+    Value* CounterValue = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
+    // save inbuf ptr so that we can calculate inbuf = inbuf_orig + i * extend for each iter over incount
+    Value* inbuf_orig = Builder.CreateLoad(inbuf_ptr);
+    Value* inbuf_orig_int = Builder.CreatePtrToInt(inbuf_orig, Type::getInt64Ty(getGlobalContext()));
+    Value* extend = ConstantInt::get(getGlobalContext(), APInt(32, this->getExtend(), false));
+                            
+    // Make the new basic block for the loop header, inserting after current block.
+    Function* TheFunction = Builder.GetInsertBlock()->getParent();
+    BasicBlock* PreheaderBB = Builder.GetInsertBlock();
+    BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
+                            
+    // Insert an explicit fall through from the current block to the LoopBB.
+    Builder.CreateBr(LoopBB);
+                            
+    // Start insertion in LoopBB.
+    Builder.SetInsertPoint(LoopBB);
+                            
+    // Start the PHI node with an entry for Start.
+    PHINode* Variable = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
+    Variable->addIncoming(CounterValue, PreheaderBB);
+                            
+    // Emit the body of the loop:
+
+    //inbuf = inbuf_old + incount_i * extend
+    Value* incnt_i_mul_ext_32 = Builder.CreateMul(Variable, extend);
+    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, Type::getInt64Ty(getGlobalContext()));
+    Value* inbuf_new_int = Builder.CreateAdd(inbuf_orig_int, incnt_i_mul_ext_64);
+
+    for (int i=0; i<this->Count; i++) {
+        // inbuf_displ = inptr_new + displ[i]
+        Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
+        Value* inbuf_displ_int = Builder.CreateAdd(inbuf_new_int, displ_i);
+        Value* inbuf_displ = Builder.CreateIntToPtr(inbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
+        Builder.CreateStore(inbuf_displ, inbuf_ptr);
+        Basetype->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
+    }
+
+    // Emit the step value. 
+    Value* StepVal = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
+    Value* NextVar = Builder.CreateAdd(Variable, StepVal, "nextvar");
+                            
+    // check if we are finished
+    Value* EndCond = Builder.CreateICmpNE(NextVar, incount, "loopcond");
+
+    // Create the "after loop" block and insert it.
+    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
+    BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+
+    // Insert the conditional branch into the end of LoopEndBB.
+    Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+                            
+    // Any new code will be inserted in AfterBB.
+    Builder.SetInsertPoint(AfterBB);
+                            
+    // Add a new entry to the PHI node for the backedge.
+    Variable->addIncoming(NextVar, LoopEndBB);
+
+    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+
+
+}
+
+Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
+
+    // start value for the loop over incount
+    Value* CounterValue = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
+    // save inbuf ptr so that we can calculate inbuf = inbuf_orig + i * extend for each iter over incount
+    Value* outbuf_orig = Builder.CreateLoad(outbuf_ptr);
+    Value* outbuf_orig_int = Builder.CreatePtrToInt(outbuf_orig, Type::getInt64Ty(getGlobalContext()));
+    Value* extend = ConstantInt::get(getGlobalContext(), APInt(32, this->getExtend(), false));
+                            
+    // Make the new basic block for the loop header, inserting after current block.
+    Function* TheFunction = Builder.GetInsertBlock()->getParent();
+    BasicBlock* PreheaderBB = Builder.GetInsertBlock();
+    BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
+                            
+    // Insert an explicit fall through from the current block to the LoopBB.
+    Builder.CreateBr(LoopBB);
+                            
+    // Start insertion in LoopBB.
+    Builder.SetInsertPoint(LoopBB);
+                            
+    // Start the PHI node with an entry for Start.
+    PHINode* Variable = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
+    Variable->addIncoming(CounterValue, PreheaderBB);
+                            
+    // Emit the body of the loop:
+
+    //inbuf = inbuf_old + incount_i * extend
+    Value* incnt_i_mul_ext_32 = Builder.CreateMul(Variable, extend);
+    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, Type::getInt64Ty(getGlobalContext()));
+    Value* outbuf_new_int = Builder.CreateAdd(outbuf_orig_int, incnt_i_mul_ext_64);
+
+    for (int i=0; i<this->Count; i++) {
+        // inbuf_displ = inptr_new + displ[i]
+        Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
+        Value* outbuf_displ_int = Builder.CreateAdd(outbuf_new_int, displ_i);
+        Value* outbuf_displ = Builder.CreateIntToPtr(outbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
+        Builder.CreateStore(outbuf_displ, outbuf_ptr);
+        Basetype->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
+    }
+
+    // Emit the step value. 
+    Value* StepVal = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
+    Value* NextVar = Builder.CreateAdd(Variable, StepVal, "nextvar");
+                            
+    // check if we are finished
+    Value* EndCond = Builder.CreateICmpNE(NextVar, incount, "loopcond");
+
+    // Create the "after loop" block and insert it.
+    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
+    BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+
+    // Insert the conditional branch into the end of LoopEndBB.
+    Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+                            
+    // Any new code will be inserted in AfterBB.
+    Builder.SetInsertPoint(AfterBB);
+                            
+    // Add a new entry to the PHI node for the backedge.
+    Variable->addIncoming(NextVar, LoopEndBB);
+
+    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+
+
+}
+
+
 // this jits the pack/unpack functions
-int FARC_DDT_Commit(FARC_Datatype* ddt) {
+void generate_pack_function(FARC_Datatype* ddt) {
 
     std::vector<std::string> Args;
     Args.push_back("inbuf");
@@ -873,27 +1240,92 @@ int FARC_DDT_Commit(FARC_Datatype* ddt) {
 
     //F->dump();
 
-     // store a function pointer to the JITed function in a lookup table,
-     // return lookup table index
      void *FPtr = TheExecutionEngine->getPointerToFunction(F);
-
-     Packers.push_back(FPtr);
 
      ddt->packer = FPtr;
 
-     return Packers.size()-1;
+}
+
+void generate_unpack_function(FARC_Datatype* ddt) {
+
+    std::vector<std::string> Args;
+    Args.push_back("inbuf");
+    Args.push_back("count");
+    Args.push_back("outbuf");
+
+    std::vector<Type*> FuncArgs;
+    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
+    FuncArgs.push_back(Type::getInt32Ty(getGlobalContext()));
+    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
+
+    FunctionType *FT = FunctionType::get(Type::getInt32Ty(getGlobalContext()), FuncArgs, false);
+
+    Function* F = Function::Create(FT, Function::ExternalLinkage, "packer", TheModule);
+    // Set names for all arguments.
+    unsigned Idx = 0;
+
+    for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size(); ++AI, ++Idx) {
+        AI->setName(Args[Idx]);
+        NamedValues[Args[Idx]] = AI;
+    }
+
+    // Create a new basic block to start insertion into.
+    BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", F);
+    Builder.SetInsertPoint(BB);
+
+    Value* inbuf_ptr = Builder.CreateAlloca(Type::getInt8PtrTy(getGlobalContext()));
+    Value* outbuf_ptr = Builder.CreateAlloca(Type::getInt8PtrTy(getGlobalContext()));
+
+    Builder.CreateStore(NamedValues["inbuf"], inbuf_ptr);
+    Builder.CreateStore(NamedValues["outbuf"], outbuf_ptr);
+
+    // generate code for the datatype
+    Value* RetVal = ddt->Codegen_Unpack(inbuf_ptr, NamedValues["count"], outbuf_ptr);
+
+    Builder.CreateRet(RetVal);
+
+    verifyFunction(*F);
+    TheFPM->run(*F);
+
+    //F->dump();
+
+     void *FPtr = TheExecutionEngine->getPointerToFunction(F);
+
+     ddt->unpacker = FPtr;
+
+}
+
+FARC_Datatype* FARC_DDT_Commit(FARC_Datatype* ddt) {
+
+//    This is usefull for debugging, as it allows us to call printf during jitting
+//    std::vector<llvm::Type*> printf_arg_types;
+//    printf_arg_types.push_back(Type::getInt8PtrTy(getGlobalContext()));
+//    FunctionType* printf_type = FunctionType::get(Type::getInt32Ty(getGlobalContext()), printf_arg_types, true);
+//    func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
+
+    generate_pack_function(ddt);
+    generate_unpack_function(ddt);
+
+    return ddt;
 
 }
 
 // this calls the pack/unpack function
-void FARC_DDT_Pack(char* inbuf, char* outbuf, int ddt_handle, int count) {
+void FARC_DDT_Pack(char* inbuf, char* outbuf, FARC_Datatype* ddt, int count) {
 
-     int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) Packers[ddt_handle];
+     int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) ddt->packer;
      FP(inbuf, count, outbuf);
     
 }
 
+void FARC_DDT_Unpack(char* inbuf, char* outbuf, FARC_Datatype* ddt, int count) {
 
+     int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) ddt->unpacker;
+     FP(inbuf, count, outbuf);
+    
+}
+
+// init the JIT compiler
 void FARC_DDT_Init() {
 
     InitializeNativeTarget();

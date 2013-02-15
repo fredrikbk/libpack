@@ -35,7 +35,7 @@ int MPI_Init(int *argc, char ***argv);
 }
 
 // we rely on MPI_Datatype beeing typedef'd to int so that we can use them as index into a vector
-std::vector<FARC_Datatype> g_my_types;
+std::vector<FARC_Datatype*> g_my_types;
 
 int MPI_Init(int *argc, char ***argv) {
 
@@ -45,7 +45,9 @@ int MPI_Init(int *argc, char ***argv) {
        have the primitive ddts built in
      */
 
-    FARC_PrimitiveDatatype* ddt = new  FARC_PrimitiveDatatype(MPI_DOUBLE);
+    printf("MPI init was called\n");
+
+    FARC_PrimitiveDatatype* ddt = new FARC_PrimitiveDatatype(MPI_DOUBLE);
     g_my_types.push_back(ddt);
 
     return PMPI_Init(argc, argv);
@@ -58,7 +60,7 @@ int MPI_Type_vector(int count, int blocklength, int stride, MPI_Datatype oldtype
 
     if (oldtype == MPI_DOUBLE) oldtype_farc = g_my_types[0];
     else oldtype_farc = g_my_types[oldtype];
-    FARC_PrimitiveDatatype* ddt = new FARC_VectorDatatype(oldtype_farc, count, blocklength, stride);
+    FARC_Datatype* ddt = new FARC_VectorDatatype(oldtype_farc, count, blocklength, stride);
     g_my_types.push_back(ddt);
     int idx = g_my_types.size() - 1;
     *newtype = idx;
@@ -78,10 +80,10 @@ int MPI_Type_commit(MPI_Datatype *datatype) {
 int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
 
     if (datatype != MPI_DOUBLE) {
-        int outsize = datatype->getSize() * count;
-        char* outbuf = malloc(outsize);
+        int outsize = g_my_types[datatype]->getSize() * count;
+        char* outbuf = (char*) malloc(outsize);
 
-        int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) farc_ddt->packer;
+        int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[datatype]->packer;
         FP(buf, count, outbuf);
     
         PMPI_Send(outbuf, outsize, MPI_BYTE, dest, tag, comm);
@@ -91,9 +93,10 @@ int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI
         return MPI_SUCCESS;
     }
     else {
-        PMPI_Send(outbuf, outsize, datatype, dest, tag, comm);
+        PMPI_Send(buf, count, datatype, dest, tag, comm);
     }
 
+    return MPI_SUCCESS;
 }
 
 

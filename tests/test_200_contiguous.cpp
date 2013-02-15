@@ -18,8 +18,8 @@ int main(int argc, char** argv) {
     FARC_DDT_Init();
     FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_INT);
     FARC_Datatype* t2 = new FARC_ContiguousDatatype(t1, 8);
-    int ddt_handle = FARC_DDT_Commit(t2);
-    FARC_DDT_Pack(farc_inbuf, farc_outbuf, ddt_handle, 2);
+    FARC_DDT_Commit(t2);
+    FARC_DDT_Pack(farc_inbuf, farc_outbuf, t2, 2);
 
     int position = 0;
     MPI_Datatype new_contig;
