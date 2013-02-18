@@ -5,7 +5,7 @@ LDLIBS=$(shell llvm-config --libs all)
 LDFLAGS=$(shell llvm-config --ldflags) -lmpich
 CPPFLAGS=-g3 $(shell llvm-config --cppflags) -I/usr/include/mpi 
 
-BINARIES=$(shell ls *.cpp | sed -e 's/.cpp//';)
+BINARIES=$(shell ls *.cpp | sed -e 's/.cpp$$//g';)
 
 all: $(BINARIES)
 	./runtests.sh

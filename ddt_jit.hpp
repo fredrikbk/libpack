@@ -593,7 +593,7 @@ Value* FARC_VectorDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Value
     // now we can print as follows:
     //llvm::CallInst *call = builder.CreateCall2(func, fmt_ptr, ValueToPrint);
     */
-                            
+ 
     Value* inbuf = Builder.CreateLoad(inbuf_ptr);
     Value* outbuf = Builder.CreateLoad(outbuf_ptr);
                             
@@ -1322,6 +1322,12 @@ void FARC_DDT_Unpack(char* inbuf, char* outbuf, FARC_Datatype* ddt, int count) {
 
      int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) ddt->unpacker;
      FP(inbuf, count, outbuf);
+    
+}
+
+void FARC_DDT_Free(FARC_Datatype* ddt) {
+
+    delete ddt;
     
 }
 
