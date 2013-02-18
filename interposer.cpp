@@ -1,19 +1,5 @@
 /**
-The NAS DDT patches call the following functions:
-
-* MPI_Type_commit
-* MPI_Type_create_hindexed
-* MPI_Type_create_hvector
-* MPI_Type_create_struct
-MPI_Type_f2c
-MPI_Type_free
-* MPI_Type_vector
-
-Further we need:
-MPI_Irecv
-MPI_Isend
-* MPI_Recv
-* MPI_Send
+Link this into your application to use FARC DDTs (see the pmpi-tests Makefile for how to do that)
 */
 
 #include <mpi.h>
@@ -31,12 +17,6 @@ std::map<MPI_Request, char*> g_my_buffers;
 std::map<MPI_Request, struct recvop> g_my_recv_reqs;
 
 int MPI_Init(int *argc, char ***argv) {
-
-    /* we handle MPI_DOUBLE as a special case here, it's the only
-       primitive datatype used in the NAS benchmarks, so MPI_DOUBLE
-       is index 0 in our translation table - maybe we really should
-       have the primitive ddts built in
-     */
 
     FARC_PrimitiveDatatype* ddt;
 
