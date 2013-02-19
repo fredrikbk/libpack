@@ -26,7 +26,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 	    HRT_GET_TIMESTAMP(start);
 	    FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_INT);
 	    FARC_Datatype* t2 = new FARC_VectorDatatype(t1, inner_cnt, blklen, stride);
-	    int ddt_handle = FARC_DDT_Commit(t2);
+	   	FARC_DDT_Commit(t2);
 	    HRT_GET_TIMESTAMP(stop);
 	    HRT_GET_ELAPSED_TICKS(start, stop, &farc_type_create);
 	
@@ -40,7 +40,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 	    for (int i=0; i<inner_runs; i++) {
 	
 	        HRT_GET_TIMESTAMP(start);
-	        FARC_DDT_Pack(farc_inbuf, farc_outbuf, ddt_handle, outer_cnt);
+	        FARC_DDT_Pack(farc_inbuf, farc_outbuf, t2, outer_cnt);
 	        HRT_GET_TIMESTAMP(stop);
 	        HRT_GET_ELAPSED_TICKS(start, stop, &farc_pack);
 
@@ -55,9 +55,13 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
             firstline=0;
     	    printf("%10i %10.3lf %10.3lf %10.3lf %10.3lf %10i %10i %10i %10i\n", data_size, HRT_GET_USEC(mpi_type_create), HRT_GET_USEC(farc_type_create), HRT_GET_USEC(mpi_pack), HRT_GET_USEC(farc_pack), blklen, stride, inner_cnt, outer_cnt);
 	    } 
-	
-    }	
 
+		MPI_Type_free(&newtype);
+		FARC_DDT_Free(t1);
+		FARC_DDT_Free(t2);
+	
+    }
+	
 	free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
 }
