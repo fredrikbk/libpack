@@ -12,7 +12,7 @@ CFLAGS=-g3 $(shell llvm-config --cppflags) $(CFLAGS_MPI)
 
 BINARIES=$(shell ls *.c | sed -e 's/.c$$//g';)
 
-SOURCES=$(shell ls *.c;) ../interposer.cpp
+SOURCES=$(shell ls *.c;) ../interposer.cpp ../interposer_common.cpp
 
 all: $(BINARIES)
 	./runtests.sh
@@ -25,11 +25,14 @@ Makefile.deps:
 interposer.o:
 	$(CXX) $(CFLAGS) -c ../interposer.cpp -o interposer.o
 
+interposer_common.o:
+	$(CXX) $(CFLAGS) -c ../interposer_common.cpp -o interposer_common.o
+
 %.o: %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-%: %.o interposer.o
-	$(CXX) $(LDFLAGS) $< interposer.o -o $@ $(LDLIBS)
+%: %.o interposer.o interposer_common.o
+	$(CXX) $(LDFLAGS) $< interposer.o interposer_common.o -o $@ $(LDLIBS)
 
 %: %.c
 
