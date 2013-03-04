@@ -1195,7 +1195,6 @@ Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, V
 
 }
 
-
 // this jits the pack/unpack functions
 void generate_pack_function(FARC_Datatype* ddt) {
 

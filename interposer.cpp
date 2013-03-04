@@ -189,7 +189,7 @@ int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI
         return MPI_SUCCESS;
     }
     else {
-        PMPI_Send(buf, count, MPI_BYTE, dest, tag, comm);
+        PMPI_Send(buf, count, MPI_DOUBLE, dest, tag, comm);
     }
 
     return MPI_SUCCESS;
@@ -213,7 +213,7 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, M
         return MPI_SUCCESS;
     }
     else {
-        PMPI_Recv(buf, count, MPI_BYTE, source, tag, comm, status);
+        PMPI_Recv(buf, count, MPI_DOUBLE, source, tag, comm, status);
     }
 
     return MPI_SUCCESS;
@@ -237,7 +237,7 @@ int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MP
         return MPI_SUCCESS;
     }
     else {
-        PMPI_Isend(buf, count, MPI_BYTE, dest, tag, comm, request);
+        PMPI_Isend(buf, count, MPI_DOUBLE, dest, tag, comm, request);
         g_my_buffers[*request] = NULL;
     }
 
@@ -265,7 +265,7 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source, int tag, 
         return MPI_SUCCESS;
     }
     else {
-        PMPI_Irecv(buf, count, MPI_BYTE, source, tag, comm, request);
+        PMPI_Irecv(buf, count, MPI_DOUBLE, source, tag, comm, request);
         g_my_buffers[*request] = NULL;
     }
 
