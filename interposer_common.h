@@ -14,6 +14,11 @@ void interposer_hindexed(int count, int array_of_blocklengths[], MPI_Aint array_
 void interposer_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype);
 void interposer_commit(MPI_Datatype *datatype);
 void interposer_free(MPI_Datatype *datatype);
-
+char* interposer_buffer_alloc(int count, MPI_Datatype datatype, int* buf_size);
+void interposer_buffer_free(char* buf);
+void interposer_buffer_register(MPI_Request* request, char* buf);
+void interposer_recvop_register(void *data, int count, MPI_Datatype datatype, char* buf, MPI_Request *request);
+char* interposer_pack(void *data, int count, MPI_Datatype datatype, int *buf_size);
+void interposer_unpack(void *data, int count, MPI_Datatype datatype, char* buf);
 
 #endif

@@ -103,118 +103,44 @@ void interposer_free(MPI_Datatype *datatype) {
     FARC_DDT_Free(g_my_types[*datatype]);
 }
 
-
-//**********************************************************
-
-
-int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
-
-    // TODO check other primitive types!
-    if (datatype != MPI_DOUBLE) {
-        int outsize = g_my_types[datatype]->getSize() * count;
-
-        // OPT: Allocate buffer on stack or cache buffers in a map keyed on sizes
-        char* outbuf = (char*) malloc(outsize);
-
-        int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[datatype]->packer;
-        FP(buf, count, outbuf);
-    
-        PMPI_Send(outbuf, outsize, MPI_BYTE, dest, tag, comm);
-
-        free(outbuf);
-
-        return MPI_SUCCESS;
-    }
-    else {
-        PMPI_Send(buf, count, MPI_DOUBLE, dest, tag, comm);
-    }
-
-    return MPI_SUCCESS;
+// OPT: Allocate buffer on stack or cache buffers in a map keyed on sizes
+char* interposer_buffer_alloc(int count, MPI_Datatype datatype, int* buf_size) {
+    *buf_size = g_my_types[datatype]->getSize() * count;
+    return (char*) malloc(*buf_size);
 }
 
-int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm, MPI_Request *request) {
-
-    // TODO check other primitive types!
-    if (datatype != MPI_DOUBLE) {
-        int outsize = g_my_types[datatype]->getSize() * count;
-
-        // OPT: Cache buffers in a map keyed on sizes
-        char* outbuf = (char*) malloc(outsize);
-
-        int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[datatype]->packer;
-        FP(buf, count, outbuf);
-    
-        PMPI_Isend(outbuf, outsize, MPI_BYTE, dest, tag, comm, request);
-
-        g_my_buffers[*request] = outbuf;
-
-        return MPI_SUCCESS;
-    }
-    else {
-        PMPI_Isend(buf, count, MPI_DOUBLE, dest, tag, comm, request);
-        g_my_buffers[*request] = NULL;
-    }
-
-    return MPI_SUCCESS;
+void interposer_buffer_free(char* buf) {
+    free(buf);
 }
 
-int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status) {
-
-    // TODO check other primitive types!
-
-
-    if (datatype != MPI_DOUBLE) {
-        int insize = g_my_types[datatype]->getSize() * count;
-
-        // OPT: Allocate buffer on stack or cache buffers in a map keyed on sizes
-        char* inbuf = (char*) malloc(insize);
-
-        PMPI_Recv(inbuf, insize, MPI_BYTE, source, tag, comm, status);
-        int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[datatype]->unpacker;
-        FP(inbuf, count, buf);
-
-        free(inbuf);
-
-        return MPI_SUCCESS;
-    }
-    else {
-        PMPI_Recv(buf, count, MPI_DOUBLE, source, tag, comm, status);
-    }
-
-    return MPI_SUCCESS;
-   
+void interposer_buffer_register(MPI_Request* request, char* buf) {
+    g_my_buffers[*request] = buf;
 }
 
-int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Request *request) {
-
+void interposer_recvop_register(void *data, int count, MPI_Datatype datatype, char* buf, MPI_Request *request) {
     struct recvop rop;
-    rop.buf = buf;
+    rop.buf = data;
     rop.count = count;
     rop.datatype = datatype;
-
-    // TODO check other primitive types!
-
-    if (datatype != MPI_DOUBLE) {
-        int insize = g_my_types[datatype]->getSize() * count;
-
-        // OPT: Cache buffers in a map keyed on sizes
-        char* inbuf = (char*) malloc(insize);
-        rop.shaddow = inbuf;
-
-        PMPI_Irecv(inbuf, insize, MPI_BYTE, source, tag, comm, request);
-        g_my_buffers[*request] = inbuf;
-        g_my_recv_reqs[*request] = rop;
-
-        return MPI_SUCCESS;
-    }
-    else {
-        PMPI_Irecv(buf, count, MPI_DOUBLE, source, tag, comm, request);
-        g_my_buffers[*request] = NULL;
-    }
-
-    return MPI_SUCCESS;
-   
+    rop.shaddow = buf;
+    g_my_recv_reqs[*request] = rop;
 }
+
+char* interposer_pack(void *data, int count, MPI_Datatype datatype, int *buf_size) {
+    char* buf = interposer_buffer_alloc(count, datatype, buf_size);
+
+    int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[datatype]->packer;
+    FP(data, count, buf);
+
+    return buf;
+}
+
+void interposer_unpack(void *data, int count, MPI_Datatype datatype, char* buf) {
+    int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[datatype]->unpacker;
+    FP(buf, count, data);
+}
+
+//**********************************************************
 
 int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_statuses) {
 
@@ -345,6 +271,71 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
 
 // Fortran Bindings
 extern "C" {
-void interposer_init_() { interposer_init(); }
-void interposer_pack_(double *buf) {}
+    void interposer_init_() {
+	interposer_init();
+    }
+    
+    void interposer_hvector_(int count, int blocklength, MPI_Aint stride, MPI_Datatype oldtype, MPI_Datatype *newtype) {
+	interposer_hvector(count, blocklength, stride, oldtype, newtype);
+    }
+
+    void interposer_vector_(int count, int blocklength, int stride, MPI_Datatype oldtype, MPI_Datatype *newtype) {
+	interposer_vector(count, blocklength, stride, oldtype, newtype);
+    }
+
+    void interposer_create_struct_(int count, int array_of_blocklengths[], MPI_Aint array_of_displacements[], MPI_Datatype array_of_types[], MPI_Datatype *newtype) {
+	interposer_create_struct(count, array_of_blocklengths, array_of_displacements, array_of_types, newtype);
+    }
+	
+    void interposer_struct_(int count, int *array_of_blocklengths, MPI_Aint *array_of_displacements, MPI_Datatype *array_of_types, MPI_Datatype *newtype) {
+	interposer_struct(count, array_of_blocklengths, array_of_displacements, array_of_types, newtype);
+    }
+
+    void interposer_create_hvector_(int count, int blocklength, MPI_Aint stride, MPI_Datatype oldtype, MPI_Datatype *newtype) {
+	interposer_create_hvector(count, blocklength, stride, oldtype, newtype);
+    }
+
+    void interposer_create_hindexed_(int count, int array_of_blocklengths[], MPI_Aint array_of_displacements[], MPI_Datatype oldtype, MPI_Datatype *newtype) {
+	interposer_create_hindexed(count, array_of_blocklengths, array_of_displacements, oldtype, newtype);
+    }
+
+    void interposer_hindexed_(int count, int array_of_blocklengths[], MPI_Aint array_of_displacements[], MPI_Datatype oldtype, MPI_Datatype *newtype) {
+	interposer_hindexed(count, array_of_blocklengths, array_of_displacements, oldtype, newtype);
+    }
+
+    void interposer_contiguous_(int count, MPI_Datatype oldtype, MPI_Datatype *newtype) {
+	interposer_contiguous(count, oldtype, newtype);
+    }
+
+    void interposer_commit_(MPI_Datatype *datatype) {
+	interposer_commit(datatype);
+    }
+
+    void interposer_free_(MPI_Datatype *datatype) {
+	interposer_free(datatype);
+    }
+
+    char* interposer_buffer_alloc_(int count, MPI_Datatype datatype, int* buf_size) {
+	return interposer_buffer_alloc(count, datatype, buf_size);
+    }
+
+    void interposer_buffer_free_(char* buf) {
+	interposer_buffer_free(buf);
+    }
+
+    void interposer_buffer_register_(MPI_Request* request, char* buf) {
+	interposer_buffer_register(request, buf);
+    }
+
+    void interposer_recvop_register_(void *data, int count, MPI_Datatype datatype, char* buf, MPI_Request *request) {
+	interposer_recvop_register(data, count, datatype, buf, request);
+    }
+
+    char* interposer_pack_(void *data, int count, MPI_Datatype datatype, int *buf_size) {
+	return interposer_pack(data, count, datatype, buf_size);
+    }
+
+    void interposer_unpack_(void *data, int count, MPI_Datatype datatype, char* buf) {
+	interposer_unpack(data, count, datatype, buf);
+    }
 }

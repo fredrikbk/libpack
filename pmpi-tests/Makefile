@@ -4,7 +4,7 @@ CXX=clang++
 
 CFLAGS_MPI=-D_FORTIFY_SOURCE=2 -I/usr/include/mpich2
 LDFLAGS_MPI=-Wl,-z,relro -L/usr/lib
-LDLIBS_MPI=-lmpich -lopa -lmpl -lrt -lcr -lpthread
+LDLIBS_MPI=-lmpich -lopa -lrt -lpthread # -lmpl -lcr
 
 LDLIBS=$(shell llvm-config --libs all) $(LDLIBS_MPI)
 LDFLAGS=$(shell llvm-config --ldflags) $(LDFLAGS_MPI)
