@@ -1,5 +1,6 @@
       subroutine MPI_INIT(ierr)
       integer ierr
+      print*,"MPI_INIT"
       call interposer_init()
       call PMPI_INIT(ierr)
       end
