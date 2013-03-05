@@ -22,17 +22,17 @@ all: $(BINARIES)
 Makefile.deps:
 	$(CXX) $(CFLAGS) -MM -x c++ $(SOURCES) > Makefile.deps
 
-interposer.o:
-	$(CXX) $(CFLAGS) -c ../interposer.c -o interposer.o
-
-interposer_common.o:
-	$(CXX) $(CFLAGS) -c ../interposer_common.cpp -o interposer_common.o
-
 %.o: %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
+interposer.o:
+	$(CXX) $(CFLAGS) -c ../interposer.c -o ../interposer.o
+
+interposer_common.o:
+	$(CXX) $(CFLAGS) -c ../interposer_common.cpp -o ../interposer_common.o
+
 %: %.o interposer.o interposer_common.o
-	$(CXX) $(LDFLAGS) $< interposer.o interposer_common.o -o $@ $(LDLIBS)
+	$(CXX) $(LDFLAGS) $< ../interposer.o ../interposer_common.o -o $@ $(LDLIBS)
 
 %: %.c
 
