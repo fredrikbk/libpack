@@ -275,7 +275,7 @@ Value* FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, V
 
 Value* FARC_ContiguousDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
 
-    return this->Codegen_Pack(inbuf_ptr, incount, outbuf_ptr);
+    return this->Codegen_Unpack(inbuf_ptr, incount, outbuf_ptr);
 
 }
 
@@ -759,7 +759,7 @@ Value* FARC_VectorDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Val
     // store oldout, so that we can calc stride
     Value* oldout = Builder.CreateLoad(outbuf_ptr);
                             
-    Basetype->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen, false)), outbuf_ptr);
+    Basetype->Codegen_Unpack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen, false)), outbuf_ptr);
                             
     Value* newout = Builder.CreateLoad(outbuf_ptr);
                             
@@ -980,7 +980,7 @@ Value* FARC_StructDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Val
         Value* outbuf_displ_int = Builder.CreateAdd(outbuf_new_int, displ_i);
         Value* outbuf_displ = Builder.CreateIntToPtr(outbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
         Builder.CreateStore(outbuf_displ, outbuf_ptr);
-        this->Types[i]->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
+        this->Types[i]->Codegen_Unpack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
     }
 
     // Emit the step value. 
@@ -1167,7 +1167,7 @@ Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, V
         Value* outbuf_displ_int = Builder.CreateAdd(outbuf_new_int, displ_i);
         Value* outbuf_displ = Builder.CreateIntToPtr(outbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
         Builder.CreateStore(outbuf_displ, outbuf_ptr);
-        Basetype->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
+        Basetype->Codegen_Unpack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
     }
 
     // Emit the step value. 
