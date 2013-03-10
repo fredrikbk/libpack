@@ -604,14 +604,17 @@ void FARC_VectorDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, i
 
 
     // Move the the extend-stride ptr back Extend(Basetype) * Stride - Size(Basetype) * Blocklen  
-    Value* nextinorout = NULL;
+    Value* nextin_outer = NULL;
+    Value* nextout_outer = NULL;
     if (pack) {
+        nextout_outer = nextout_inner;
         Value* nextin_outer_val = Builder.CreateAdd(in_addr_cvi, out_bytes_to_stride );
-        nextinorout = Builder.CreateIntToPtr(nextin_outer_val, Type::getInt8PtrTy(getGlobalContext()));
+        nextin_outer = Builder.CreateIntToPtr(nextin_outer_val, Type::getInt8PtrTy(getGlobalContext()));
     }
     else {
         Value* nextout_outer_val = Builder.CreateAdd(out_addr_cvi, in_bytes_to_stride );
-        nextinorout = Builder.CreateIntToPtr(nextout_outer_val, Type::getInt8PtrTy(getGlobalContext()));
+        nextout_outer = Builder.CreateIntToPtr(nextout_outer_val, Type::getInt8PtrTy(getGlobalContext()));
+        nextin_outer = nextin_inner; 
     }
 
     // Increment outer loop index
@@ -625,16 +628,9 @@ void FARC_VectorDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, i
     Builder.SetInsertPoint(After_outer_BB);
 
     // Add backedges for the outer loop induction variable
-    if (pack) {
-        out_outer->addIncoming(nextout_inner, LoopEnd_outer_BB);
-        in_outer->addIncoming(nextinorout, LoopEnd_outer_BB);
-    }
-    else {
-        out_outer->addIncoming(nextinorout, LoopEnd_outer_BB);
-        in_outer->addIncoming(nextin_inner, LoopEnd_outer_BB);
-    }
+    out_outer->addIncoming(nextout_outer, LoopEnd_outer_BB);
+    in_outer->addIncoming(nextin_outer, LoopEnd_outer_BB);
     i->addIncoming(nexti, LoopEnd_outer_BB);
-
 }
 
 Value* FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
