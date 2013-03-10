@@ -107,10 +107,10 @@ Value* FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value*
 
 }
 
-Value* FARC_PrimitiveDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
+Value* FARC_PrimitiveDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
 
     // does exactly the same as pack for primitive types
-    return this->Codegen_Pack(inbuf_ptr, incount, outbuf_ptr);
+    return this->Codegen_Pack(inbuf, incount, outbuf);
 }
 
 FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(MPI_Datatype type) {
@@ -132,6 +132,7 @@ class FARC_ContiguousDatatype : public FARC_Datatype {
 
     FARC_Datatype* Basetype;
     int Count;
+    void Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out);
 
     public:
     FARC_ContiguousDatatype(FARC_Datatype* type, int count) : Basetype(type), Count(count) {}
@@ -150,8 +151,7 @@ int FARC_ContiguousDatatype::getSize() {
     return this->Count * this->Basetype->getSize();
 }
 
-Value* FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
-
+void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out) {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Loop
@@ -174,15 +174,15 @@ Value* FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value
 
 
     // Increment the out ptr by Size(Basetype) * Blocklen
-    Value* bytesWritten = ConstantInt::get(getGlobalContext(), APInt(64, this->Basetype->getSize() * this->Count, false));
+    Value* out_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_out * this->Count, false));
     Value* out_addr_cvi = Builder.CreatePtrToInt(out, Type::getInt64Ty(getGlobalContext()));
-    Value* out_addr = Builder.CreateAdd(out_addr_cvi, bytesWritten);
+    Value* out_addr = Builder.CreateAdd(out_addr_cvi, out_bytes_to_stride);
     Value* nextout = Builder.CreateIntToPtr(out_addr, Type::getInt8PtrTy(getGlobalContext()));
 
     // Increment the in ptr by Extend(Basetype) * Stride
-    Value* bytesToStride = ConstantInt::get(getGlobalContext(), APInt(64, this->Basetype->getExtend() * this->Count, false));
+    Value* in_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_in * this->Count, false));
     Value* in_addr_cvi = Builder.CreatePtrToInt(in, Type::getInt64Ty(getGlobalContext()));
-    Value* in_addr = Builder.CreateAdd(in_addr_cvi, bytesToStride);
+    Value* in_addr = Builder.CreateAdd(in_addr_cvi, in_bytes_to_stride);
     Value* nextin = Builder.CreateIntToPtr(in_addr, Type::getInt8PtrTy(getGlobalContext()));
 
     // Increment outer loop index
@@ -199,62 +199,16 @@ Value* FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value
     out->addIncoming(nextout, LoopEndBB);
     in->addIncoming(nextin, LoopEndBB);
     i->addIncoming(nexti, LoopEndBB);
+}
 
+Value* FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+    Codegen(inbuf, incount, outbuf, this->Basetype->getExtend(), this->Basetype->getSize());
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
 }
 
 Value* FARC_ContiguousDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
-
-    Function* TheFunction = Builder.GetInsertBlock()->getParent();
-
-    // Loop
-    BasicBlock* PreheaderBB = Builder.GetInsertBlock();
-    BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
-    Builder.CreateBr(LoopBB);
-    Builder.SetInsertPoint(LoopBB);
-
-    // Induction var phi nodes
-    PHINode *out = Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "out");
-    out->addIncoming(outbuf, PreheaderBB);
-    PHINode *in= Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "in");
-    in->addIncoming(inbuf, PreheaderBB);
-    PHINode *i = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
-    i->addIncoming(constNode(0), PreheaderBB);
-
-
-    // Basetype Code Generation
-    Basetype->Codegen_Pack(in, ConstantInt::get(getGlobalContext(), APInt(32, this->Count, false)), out);
-
-
-    // Increment the out ptr by Size(Basetype) * Blocklen
-    Value* bytesWritten = ConstantInt::get(getGlobalContext(), APInt(64, this->Basetype->getExtend() * this->Count, false));
-    Value* out_addr_cvi = Builder.CreatePtrToInt(out, Type::getInt64Ty(getGlobalContext()));
-    Value* out_addr = Builder.CreateAdd(out_addr_cvi, bytesWritten);
-    Value* nextout = Builder.CreateIntToPtr(out_addr, Type::getInt8PtrTy(getGlobalContext()));
-
-    // Increment the in ptr by Extend(Basetype) * Stride
-    Value* bytesToStride = ConstantInt::get(getGlobalContext(), APInt(64, this->Basetype->getSize() * this->Count, false));
-    Value* in_addr_cvi = Builder.CreatePtrToInt(in, Type::getInt64Ty(getGlobalContext()));
-    Value* in_addr = Builder.CreateAdd(in_addr_cvi, bytesToStride);
-    Value* nextin = Builder.CreateIntToPtr(in_addr, Type::getInt8PtrTy(getGlobalContext()));
-
-    // Increment outer loop index
-    Value* nexti = Builder.CreateAdd(i, constNode(1), "nexti");
-    Value* EndCond_outer = Builder.CreateICmpEQ(nexti, incount, "loopcond");
-
-    // Create and branch to the outer loop postamble
-    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
-    BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
-    Builder.CreateCondBr(EndCond_outer, AfterBB, LoopBB);
-    Builder.SetInsertPoint(AfterBB);
-
-    // Add backedges for the outer loop induction variable
-    out->addIncoming(nextout, LoopEndBB);
-    in->addIncoming(nextin, LoopEndBB);
-    i->addIncoming(nexti, LoopEndBB);
-
+    Codegen(inbuf, incount, outbuf, this->Basetype->getSize(), this->Basetype->getExtend());
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
-
 }
 
 /* Class for hvector types */
@@ -537,6 +491,7 @@ class FARC_VectorDatatype : public FARC_Datatype {
     int Count;
     int Blocklen;
     int Stride;
+    void Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out, bool pack);
 
     public:
     FARC_VectorDatatype(FARC_Datatype* type, int count, int blocklen, int stride) : Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
@@ -548,19 +503,14 @@ class FARC_VectorDatatype : public FARC_Datatype {
 };
 
 int FARC_VectorDatatype::getExtend() {
-
     return (this->Count - 1) * this->Basetype->getExtend() * this->Stride + this->Blocklen * this->Basetype->getExtend();
-
 }
 
 int FARC_VectorDatatype::getSize() {
-
     return this->Count * this->Blocklen*this->Basetype->getSize();
-
 }
 
-Value* FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
-
+void FARC_VectorDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out, bool pack) {
     /** for debugging **   
     std::vector<llvm::Type*> printf_arg_types;
     printf_arg_types.push_back(Type::getInt8PtrTy(getGlobalContext()));
@@ -610,15 +560,15 @@ Value* FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* ou
 
 
     // Increment the out ptr by Size(Basetype) * Blocklen
-    Value* bytesWritten = ConstantInt::get(getGlobalContext(), APInt(64, this->Basetype->getSize() * this->Blocklen, false));
+    Value* out_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_out, false));
     Value* out_addr_cvi = Builder.CreatePtrToInt(out_inner, Type::getInt64Ty(getGlobalContext()));
-    Value* out_addr = Builder.CreateAdd(out_addr_cvi, bytesWritten);
+    Value* out_addr = Builder.CreateAdd(out_addr_cvi, out_bytes_to_stride);
     Value* nextout_inner = Builder.CreateIntToPtr(out_addr, Type::getInt8PtrTy(getGlobalContext()));
 
     // Increment the in ptr by Extend(Basetype) * Stride
-    Value* bytesToStride = ConstantInt::get(getGlobalContext(), APInt(64, this->Basetype->getExtend() * this->Stride, false));
+    Value* in_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_in, false));
     Value* in_addr_cvi = Builder.CreatePtrToInt(in_inner, Type::getInt64Ty(getGlobalContext()));
-    Value* in_addr = Builder.CreateAdd(in_addr_cvi, bytesToStride);
+    Value* in_addr = Builder.CreateAdd(in_addr_cvi, in_bytes_to_stride);
     Value* nextin_inner = Builder.CreateIntToPtr(in_addr, Type::getInt8PtrTy(getGlobalContext()));
 
     // Prefetch
@@ -653,149 +603,48 @@ Value* FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* ou
     j->addIncoming(nextj, LoopEnd_inner_BB);
 
 
-    // Move the in ptr back Extend(Basetype) * Stride - Size(Basetype) * Blocklen  
-    Value* nextin_outer_val = Builder.CreateAdd(in_addr_cvi, bytesWritten);
-    Value* nextin_outer = Builder.CreateIntToPtr(nextin_outer_val, Type::getInt8PtrTy(getGlobalContext()));
+    // Move the the extend-stride ptr back Extend(Basetype) * Stride - Size(Basetype) * Blocklen  
+    Value* nextinorout = NULL;
+    if (pack) {
+        Value* nextin_outer_val = Builder.CreateAdd(in_addr_cvi, out_bytes_to_stride );
+        nextinorout = Builder.CreateIntToPtr(nextin_outer_val, Type::getInt8PtrTy(getGlobalContext()));
+    }
+    else {
+        Value* nextout_outer_val = Builder.CreateAdd(out_addr_cvi, in_bytes_to_stride );
+        nextinorout = Builder.CreateIntToPtr(nextout_outer_val, Type::getInt8PtrTy(getGlobalContext()));
+    }
 
     // Increment outer loop index
     Value* nexti = Builder.CreateAdd(i, constNode(1), "nexti");
-    Value* EndCond_outer = Builder.CreateICmpEQ(nexti, incount, "loopcond");
+    Value* EndCond_outer = Builder.CreateICmpEQ(nexti, incount, "outercond");
 
     // Create and branch to the outer loop postamble
     BasicBlock *LoopEnd_outer_BB = Builder.GetInsertBlock();
-    BasicBlock *After_outer_BB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+    BasicBlock *After_outer_BB = BasicBlock::Create(getGlobalContext(), "afterouter", TheFunction);
     Builder.CreateCondBr(EndCond_outer, After_outer_BB, Loop_outer_BB);
     Builder.SetInsertPoint(After_outer_BB);
 
     // Add backedges for the outer loop induction variable
-    out_outer->addIncoming(nextout_inner, LoopEnd_outer_BB);
-    in_outer->addIncoming(nextin_outer, LoopEnd_outer_BB);
+    if (pack) {
+        out_outer->addIncoming(nextout_inner, LoopEnd_outer_BB);
+        in_outer->addIncoming(nextinorout, LoopEnd_outer_BB);
+    }
+    else {
+        out_outer->addIncoming(nextinorout, LoopEnd_outer_BB);
+        in_outer->addIncoming(nextin_inner, LoopEnd_outer_BB);
+    }
     i->addIncoming(nexti, LoopEnd_outer_BB);
 
-    // return 0 for now
+}
+
+Value* FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+    Codegen(inbuf, incount, outbuf, this->Basetype->getExtend() * this->Stride, this->Basetype->getSize() * this->Blocklen, true);
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
 }
 
-Value* FARC_VectorDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
-
-    /** for debugging **   
-    std::vector<llvm::Type*> printf_arg_types;
-    printf_arg_types.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    FunctionType* printf_type = FunctionType::get(Type::getInt32Ty(getGlobalContext()), printf_arg_types, true);
-    Function *func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
-    Value *fmt_ptr = Builder.CreateGlobalStringPtr("stride to add: %i\n\0");
-    Value *fmt_ptr2 = Builder.CreateGlobalStringPtr("restore stride\n\0");
-    // now we can print as follows:
-    //llvm::CallInst *call = builder.CreateCall2(func, fmt_ptr, ValueToPrint);
-    */
-                            
-    Value* inbuf = Builder.CreateLoad(inbuf_ptr);
-    Value* outbuf = Builder.CreateLoad(outbuf_ptr);
-                            
-    // start value for the loop over incount
-    Value *CounterValue_outer = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
-                            
-    // Make the new basic block for the loop header, inserting after current block.
-    Function *TheFunction = Builder.GetInsertBlock()->getParent();
-    BasicBlock *Preheader_outer_BB = Builder.GetInsertBlock();
-    BasicBlock *Loop_outer_BB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
-                            
-    // Insert an explicit fall through from the current block to the LoopBB.
-    Builder.CreateBr(Loop_outer_BB);
-                            
-    // Start insertion in LoopBB.
-    Builder.SetInsertPoint(Loop_outer_BB);
-                            
-    // Start the PHI node with an entry for Start.
-    PHINode *Variable_outer = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
-    Variable_outer->addIncoming(CounterValue_outer, Preheader_outer_BB);
-                            
-    // Emit the body of the outer loop.
-                            
-    Value *CounterValue_inner = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
-                            
-    // Make the new basic block for the loop header, inserting after current block.
-    BasicBlock *Preheader_inner_BB = Builder.GetInsertBlock();
-    BasicBlock *Loop_inner_BB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
-                            
-    // Insert an explicit fall through from the current block to the LoopBB.
-    Builder.CreateBr(Loop_inner_BB);
-                            
-    // Start insertion in LoopBB.
-    Builder.SetInsertPoint(Loop_inner_BB);
-                            
-    // Start the PHI node with an entry for Start.
-    PHINode *Variable_inner = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
-    Variable_inner->addIncoming(CounterValue_inner, Preheader_inner_BB);
-                            
-    // emit the body for the inner loop
-    // store oldout, so that we can calc stride
-    Value* oldout = Builder.CreateLoad(outbuf_ptr);
-                            
-    Basetype->Codegen_Unpack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen, false)), outbuf_ptr);
-                            
-    Value* newout = Builder.CreateLoad(outbuf_ptr);
-                            
-    // *outbuf += stride - (newout - oldout)
-    Value* oldout_int = Builder.CreatePtrToInt(oldout, Type::getInt64Ty(getGlobalContext()));
-    Value* newout_int = Builder.CreatePtrToInt(newout, Type::getInt64Ty(getGlobalContext()));
-    Value* read_bytes = Builder.CreateSub(newout_int, oldout_int);
-    Value* stride = ConstantInt::get(getGlobalContext(), APInt(64, Stride*this->Basetype->getExtend(), false));
-    Value* st_add = Builder.CreateSub(stride, read_bytes);
-                            
-    Value* newout_with_stride_int = Builder.CreateAdd(st_add, newout_int);
-    Value* newout_with_stride_ptr = Builder.CreateIntToPtr(newout_with_stride_int, Type::getInt8PtrTy(getGlobalContext()));
-                            
-    Builder.CreateStore(newout_with_stride_ptr, outbuf_ptr);
-                            
-    // Emit the step value. 
-    Value* StepVal_inner = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
-    Value* NextVar_inner = Builder.CreateAdd(Variable_inner, StepVal_inner, "nextvar");
-                            
-    // check if we are finished with the loop over count
-    Value* count = ConstantInt::get(getGlobalContext(), APInt(32, Count, false));
-    Value* EndCond_inner = Builder.CreateICmpNE(NextVar_inner, count, "loopcond");
-                            
-    // Create the "after loop" block and insert it.
-    BasicBlock *LoopEnd_inner_BB = Builder.GetInsertBlock();
-    BasicBlock *After_inner_BB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
-                            
-    // Insert the conditional branch into the end of LoopEndBB.
-    Builder.CreateCondBr(EndCond_inner, Loop_inner_BB, After_inner_BB);
-                            
-    // Any new code will be inserted in AfterBB.
-    Builder.SetInsertPoint(After_inner_BB);
-                            
-    // Add a new entry to the PHI node for the backedge.
-    Variable_inner->addIncoming(NextVar_inner, LoopEnd_inner_BB);
-                            
-    // Remove the stride that was added in the last iteration
-    Builder.CreateStore(newout, outbuf_ptr);
-                            
-    /* llop epilog of outer loop*/
-                            
-    // Emit the step value. 
-    Value* StepVal_outer = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
-    Value* NextVar_outer = Builder.CreateAdd(Variable_outer, StepVal_outer, "nextvar");
-    // check if we are finished with the loop over incount
-    Value* EndCond_outer = Builder.CreateICmpNE(NextVar_outer, incount, "loopcond");
-                            
-    // Create the "after loop" block and insert it.
-    BasicBlock *LoopEnd_outer_BB = Builder.GetInsertBlock();
-    BasicBlock *After_outer_BB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
-    // Insert the conditional branch into the end of LoopEndBB.
-    Builder.CreateCondBr(EndCond_outer, Loop_outer_BB, After_outer_BB);
-
-    // Any new code will be inserted in AfterBB.
-    Builder.SetInsertPoint(After_outer_BB);
-
-    // Add a new entry to the PHI node for the backedge.
-    Variable_outer->addIncoming(NextVar_outer, LoopEnd_outer_BB);
-
-    // return 0 for now
+Value* FARC_VectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+    Codegen(inbuf, incount, outbuf, this->Basetype->getSize() * this->Blocklen, this->Basetype->getExtend() * this->Stride, false);
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
-
-
 }
 
 /* Class for struct types */
@@ -1165,7 +1014,6 @@ Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, V
 
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
 
-
 }
 
 // this jits the pack/unpack functions
@@ -1242,7 +1090,7 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 
 //    verifyFunction(*F);
 //    TheFPM->run(*F);
-    F->dump();
+//    F->dump();
 
     TheExecutionEngine->runJITOnFunction(F);
     ddt->unpacker = TheExecutionEngine->getPointerToFunction(F);
