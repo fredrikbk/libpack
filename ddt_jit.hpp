@@ -69,6 +69,10 @@ Value* constNode(int val) {
     return ConstantInt::get(getGlobalContext(), APInt(32, val, false));
 }
 
+Value* constNode(long val) {
+    return ConstantInt::get(getGlobalContext(), APInt(64, val, false));
+}
+
 void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* basetype,
         int count, int blocklen, int elemstride_in, int elemstride_out, bool pack) {
     /** for debugging **   
@@ -97,7 +101,6 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     in_outer->addIncoming(inbuf, Preheader_outer_BB);
     PHINode *i = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
     i->addIncoming(constNode(0), Preheader_outer_BB);
-    
 
     
     // Inner loop
@@ -604,6 +607,7 @@ class FARC_HIndexedDatatype : public FARC_Datatype {
     FARC_Datatype* Basetype;
     std::vector<int> Blocklen;
     std::vector<int> Displ;
+    void Codegen(Value *contig_buf, Value *hindexed_buf, Value* incount, bool gather);
 
     public:
     FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype);
@@ -655,133 +659,75 @@ int FARC_HIndexedDatatype::getSize() {
 
 }
 
-Value* FARC_HIndexedDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
-
-    // start value for the loop over incount
-    Value* CounterValue = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
-    // save inbuf ptr so that we can calculate inbuf = inbuf_orig + i * extend for each iter over incount
-    Value* inbuf_orig = Builder.CreateLoad(inbuf_ptr);
-    Value* inbuf_orig_int = Builder.CreatePtrToInt(inbuf_orig, Type::getInt64Ty(getGlobalContext()));
-    Value* extend = ConstantInt::get(getGlobalContext(), APInt(32, this->getExtend(), false));
-                            
-    // Make the new basic block for the loop header, inserting after current block.
+void FARC_HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* incount, bool pack) {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
+
+    // Base address of the input buffer
+    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, Type::getInt64Ty(getGlobalContext()));
+    Value* extend = constNode((long)this->getExtend());
+    Value* incount_64 = Builder.CreateZExt(incount, Type::getInt64Ty(getGlobalContext()));
+    Value* incount_expanded = Builder.CreateMul(incount_64, extend);
+
+    // Loop
     BasicBlock* PreheaderBB = Builder.GetInsertBlock();
     BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
-                            
-    // Insert an explicit fall through from the current block to the LoopBB.
     Builder.CreateBr(LoopBB);
-                            
-    // Start insertion in LoopBB.
     Builder.SetInsertPoint(LoopBB);
-                            
-    // Start the PHI node with an entry for Start.
-    PHINode* Variable = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
-    Variable->addIncoming(CounterValue, PreheaderBB);
-                            
-    // Emit the body of the loop:
 
-    //inbuf = inbuf_old + incount_i * extend
-    Value* incnt_i_mul_ext_32 = Builder.CreateMul(Variable, extend);
-    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, Type::getInt64Ty(getGlobalContext()));
-    Value* inbuf_new_int = Builder.CreateAdd(inbuf_orig_int, incnt_i_mul_ext_64);
+    PHINode *compact = Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "compact");
+    compact->addIncoming(compactbuf, PreheaderBB);
+    PHINode* i = Builder.CreatePHI(Type::getInt64Ty(getGlobalContext()), 2, "i");
+    i->addIncoming(constNode(0l), PreheaderBB);
 
+    Value* compact_addr = Builder.CreatePtrToInt(compact, Type::getInt64Ty(getGlobalContext()));
+
+    // OPT: Make this the loop counter
+    Value* scattered_disp_base = Builder.CreateAdd(scatteredbuf_orig_int, i);
+
+    Value* nextcompact = compact;
     for (int i=0; i<this->Count; i++) {
-        // inbuf_displ = inptr_new + displ[i]
+        // Set the scattered ptr to scattered_disp_base + this->Disl[i]
         Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
-        Value* inbuf_displ_int = Builder.CreateAdd(inbuf_new_int, displ_i);
-        Value* inbuf_displ = Builder.CreateIntToPtr(inbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
-        Builder.CreateStore(inbuf_displ, inbuf_ptr);
-        Basetype->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
+        Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
+        Value* scattered = Builder.CreateIntToPtr(scattered_disp, Type::getInt8PtrTy(getGlobalContext()));
+
+        if (pack) {
+            Basetype->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), nextcompact);
+        }
+        else {
+            Basetype->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), scattered);
+        }
+
+        // Increment the compact ptr by Size(Basetype) * Blocklen
+        Value* compact_bytes_to_stride = constNode((long)Basetype->getSize() * this->Blocklen[i]);
+        compact_addr = Builder.CreateAdd(compact_addr, compact_bytes_to_stride);
+        nextcompact = Builder.CreateIntToPtr(compact_addr, Type::getInt8PtrTy(getGlobalContext()));
     }
 
-    // Emit the step value. 
-    Value* StepVal = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
-    Value* NextVar = Builder.CreateAdd(Variable, StepVal, "nextvar");
-                            
-    // check if we are finished
-    Value* EndCond = Builder.CreateICmpNE(NextVar, incount, "loopcond");
+    // Increment the loop index and test for loop exit
+    Value* nexti = Builder.CreateAdd(i, extend, "nexti");
+    Value* EndCond = Builder.CreateICmpEQ(nexti, incount_expanded, "loopcond");
 
-    // Create the "after loop" block and insert it.
+    // Create and branch to the outer loop postamble
     BasicBlock *LoopEndBB = Builder.GetInsertBlock();
     BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
 
-    // Insert the conditional branch into the end of LoopEndBB.
-    Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
-                            
-    // Any new code will be inserted in AfterBB.
+    Builder.CreateCondBr(EndCond, AfterBB, LoopBB);
     Builder.SetInsertPoint(AfterBB);
                             
-    // Add a new entry to the PHI node for the backedge.
-    Variable->addIncoming(NextVar, LoopEndBB);
-
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
-
-
+    // Add backedges for the loop induction variable
+    compact->addIncoming(nextcompact, LoopEndBB);
+    i->addIncoming(nexti, LoopEndBB);
 }
 
-Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Value* outbuf_ptr) {
-
-    // start value for the loop over incount
-    Value* CounterValue = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
-    // save inbuf ptr so that we can calculate inbuf = inbuf_orig + i * extend for each iter over incount
-    Value* outbuf_orig = Builder.CreateLoad(outbuf_ptr);
-    Value* outbuf_orig_int = Builder.CreatePtrToInt(outbuf_orig, Type::getInt64Ty(getGlobalContext()));
-    Value* extend = ConstantInt::get(getGlobalContext(), APInt(32, this->getExtend(), false));
-                            
-    // Make the new basic block for the loop header, inserting after current block.
-    Function* TheFunction = Builder.GetInsertBlock()->getParent();
-    BasicBlock* PreheaderBB = Builder.GetInsertBlock();
-    BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
-                            
-    // Insert an explicit fall through from the current block to the LoopBB.
-    Builder.CreateBr(LoopBB);
-                            
-    // Start insertion in LoopBB.
-    Builder.SetInsertPoint(LoopBB);
-                            
-    // Start the PHI node with an entry for Start.
-    PHINode* Variable = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
-    Variable->addIncoming(CounterValue, PreheaderBB);
-                            
-    // Emit the body of the loop:
-
-    //inbuf = inbuf_old + incount_i * extend
-    Value* incnt_i_mul_ext_32 = Builder.CreateMul(Variable, extend);
-    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, Type::getInt64Ty(getGlobalContext()));
-    Value* outbuf_new_int = Builder.CreateAdd(outbuf_orig_int, incnt_i_mul_ext_64);
-
-    for (int i=0; i<this->Count; i++) {
-        // inbuf_displ = inptr_new + displ[i]
-        Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
-        Value* outbuf_displ_int = Builder.CreateAdd(outbuf_new_int, displ_i);
-        Value* outbuf_displ = Builder.CreateIntToPtr(outbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
-        Builder.CreateStore(outbuf_displ, outbuf_ptr);
-        Basetype->Codegen_Unpack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
-    }
-
-    // Emit the step value. 
-    Value* StepVal = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
-    Value* NextVar = Builder.CreateAdd(Variable, StepVal, "nextvar");
-                            
-    // check if we are finished
-    Value* EndCond = Builder.CreateICmpNE(NextVar, incount, "loopcond");
-
-    // Create the "after loop" block and insert it.
-    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
-    BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
-
-    // Insert the conditional branch into the end of LoopEndBB.
-    Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
-                            
-    // Any new code will be inserted in AfterBB.
-    Builder.SetInsertPoint(AfterBB);
-                            
-    // Add a new entry to the PHI node for the backedge.
-    Variable->addIncoming(NextVar, LoopEndBB);
-
+Value* FARC_HIndexedDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+    Codegen(outbuf, inbuf, incount, true);
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+}
 
+Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+    Codegen(inbuf, outbuf, incount, false);
+    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
 }
 
 // this jits the pack/unpack functions
