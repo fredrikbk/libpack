@@ -119,8 +119,8 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
 
 
     // Basetype Code Generation
-    basetype->Codegen_Pack(in_inner, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out_inner);
-
+    if (pack) basetype->Codegen_Pack(in_inner, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out_inner);
+    else      basetype->Codegen_Unpack(in_inner, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out_inner);
 
     // Increment the out ptr by Size(Basetype) * Blocklen
     Value* out_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_out, false));
@@ -260,7 +260,7 @@ class FARC_ContiguousDatatype : public FARC_Datatype {
 
     FARC_Datatype* Basetype;
     int Count;
-    void Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out);
+    void Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out, bool pack);
 
     public:
     FARC_ContiguousDatatype(FARC_Datatype* type, int count) : Basetype(type), Count(count) {}
@@ -279,7 +279,7 @@ int FARC_ContiguousDatatype::getSize() {
     return this->Count * this->Basetype->getSize();
 }
 
-void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out) {
+void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out, bool pack) {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Loop
@@ -298,7 +298,8 @@ void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbu
 
 
     // Basetype Code Generation
-    Basetype->Codegen_Pack(in, ConstantInt::get(getGlobalContext(), APInt(32, this->Count, false)), out);
+    if (pack) Basetype->Codegen_Pack(in, ConstantInt::get(getGlobalContext(), APInt(32, this->Count, false)), out);
+    else      Basetype->Codegen_Unpack(in, ConstantInt::get(getGlobalContext(), APInt(32, this->Count, false)), out);
 
 
     // Increment the out ptr by Size(Basetype) * Blocklen
@@ -330,12 +331,12 @@ void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbu
 }
 
 Value* FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
-    Codegen(inbuf, incount, outbuf, this->Basetype->getExtend(), this->Basetype->getSize());
+    Codegen(inbuf, incount, outbuf, this->Basetype->getExtend(), this->Basetype->getSize(), true);
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
 }
 
 Value* FARC_ContiguousDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
-    Codegen(inbuf, incount, outbuf, this->Basetype->getSize(), this->Basetype->getExtend());
+    Codegen(inbuf, incount, outbuf, this->Basetype->getSize(), this->Basetype->getExtend(), false);
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
 }
 
@@ -369,8 +370,8 @@ int FARC_HVectorDatatype::getSize() {
 }
 
 Value* FARC_HVectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
-    vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count,
-            this->Blocklen, this->Stride, this->Basetype->getSize() * this->Blocklen, true);
+    vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
+            this->Stride, this->Basetype->getSize() * this->Blocklen, true);
     return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
 }
 
@@ -691,12 +692,8 @@ void FARC_HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Valu
         Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
         Value* scattered = Builder.CreateIntToPtr(scattered_disp, Type::getInt8PtrTy(getGlobalContext()));
 
-        if (pack) {
-            Basetype->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), nextcompact);
-        }
-        else {
-            Basetype->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), scattered);
-        }
+        if (pack) Basetype->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), nextcompact);
+        else      Basetype->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), scattered);
 
         // Increment the compact ptr by Size(Basetype) * Blocklen
         Value* compact_bytes_to_stride = constNode((long)Basetype->getSize() * this->Blocklen[i]);
