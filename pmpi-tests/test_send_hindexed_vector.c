@@ -50,8 +50,8 @@ int main(int argc, char** argv) {
         PMPI_Send(pmpi_inbuf, 1, mpitype, peer, 0, MPI_COMM_WORLD);
     }
 
-    if (rank == 0)
-        inspect_buffers(20*sizeof(int), &pmpi_inbuf, &mpi_inbuf, &pmpi_outbuf, &mpi_outbuf);
+//    if (rank == 0)
+//        inspect_buffers(20*sizeof(int), &pmpi_inbuf, &mpi_inbuf, &pmpi_outbuf, &mpi_outbuf);
 
     int res = compare_buffers(20*sizeof(int), &mpi_inbuf, &pmpi_inbuf, &mpi_outbuf, &pmpi_outbuf);
     free_buffers(&mpi_inbuf, &pmpi_inbuf, &mpi_outbuf, &pmpi_outbuf);
