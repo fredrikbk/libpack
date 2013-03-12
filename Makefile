@@ -18,7 +18,7 @@ interposerf.o: interposerf.f
 	$(F77) -c interposerf.f -o interposerf.o
 
 interposer_common.o: interposer_common.cpp
-	$(CXX) $(CFLAGS) -c interposer_common.cpp -o interposer_common.o
+	$(CXX) $(CFLAGS) -DHRT_ARCH=2 -c interposer_common.cpp -o interposer_common.o
 
 clean:
 	rm -f *.o

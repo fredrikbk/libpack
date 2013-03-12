@@ -10,6 +10,11 @@ int MPI_Init(int *argc, char ***argv) {
     return PMPI_Init(argc, argv);
 }
 
+int MPI_Finalize(void) {
+    interposer_finalize();
+    return PMPI_Finalize();
+}
+
 int MPI_Type_hvector(int count, int blocklength, MPI_Aint stride, MPI_Datatype oldtype, MPI_Datatype *newtype) {
     PMPI_Type_hvector(count, blocklength, stride, oldtype, newtype);
     interposer_hvector(count, blocklength, stride, oldtype, newtype);

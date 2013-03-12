@@ -9,7 +9,7 @@
 #include <mpi.h>
 
 #define TRUNK 1
-#ifdef TRUNK
+#if TRUNK
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -33,6 +33,18 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
+#define LAZY 0
+#define TIME 0
+
+#if TIME
+#include "copy_benchmark/hrtimer/hrtimer.h"
+unsigned long long g_timerfreq;
+HRT_TIMESTAMP_T start, stop;
+uint64_t tmp;
+double commit_time = 0.0;
+#endif
+
+
 using namespace llvm;
 
 static Function* func; // printf function for debugging
@@ -46,14 +58,15 @@ static ExecutionEngine *TheExecutionEngine;
 class FARC_Datatype {
 
     public:
+    FARC_Datatype() { this->packer = NULL; this->unpacker = NULL; }
     virtual ~FARC_Datatype() {}
     virtual Value *Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) = 0;
     virtual Value *Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) = 0;
     virtual int getExtend() = 0;
     virtual int getSize() = 0;
 
-    void* packer;
-    void* unpacker;
+    int (*packer)(void*, int, void*);
+    int (*unpacker)(void*, int, void*);
 
 };
 
@@ -121,6 +134,7 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     // Basetype Code Generation
     if (pack) basetype->Codegen_Pack(in_inner, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out_inner);
     else      basetype->Codegen_Unpack(in_inner, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out_inner);
+
 
     // Increment the out ptr by Size(Basetype) * Blocklen
     Value* out_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_out, false));
@@ -241,7 +255,7 @@ Value* FARC_PrimitiveDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Valu
     return this->Codegen_Pack(inbuf, incount, outbuf);
 }
 
-FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(MPI_Datatype type) {
+FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(MPI_Datatype type) : FARC_Datatype() {
 
     this->Type = type;
 
@@ -263,7 +277,7 @@ class FARC_ContiguousDatatype : public FARC_Datatype {
     void Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out, bool pack);
 
     public:
-    FARC_ContiguousDatatype(FARC_Datatype* type, int count) : Basetype(type), Count(count) {}
+    FARC_ContiguousDatatype(FARC_Datatype* type, int count) : FARC_Datatype(), Basetype(type), Count(count) {}
     int getExtend();
     int getSize();
     Value *Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf);
@@ -349,7 +363,7 @@ class FARC_HVectorDatatype : public FARC_Datatype {
     int Stride;
 
     public:
-    FARC_HVectorDatatype(FARC_Datatype* type, int count, int blocklen, int stride) : Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
+    FARC_HVectorDatatype(FARC_Datatype* type, int count, int blocklen, int stride) :  FARC_Datatype(), Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
     Value *Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf);
     Value *Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf);
     int getExtend();
@@ -391,7 +405,7 @@ class FARC_VectorDatatype : public FARC_Datatype {
     int Stride;
 
     public:
-    FARC_VectorDatatype(FARC_Datatype* type, int count, int blocklen, int stride) : Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
+    FARC_VectorDatatype(FARC_Datatype* type, int count, int blocklen, int stride) : FARC_Datatype(), Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
     Value *Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf);
     Value *Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf);
     int getExtend();
@@ -436,7 +450,7 @@ class FARC_StructDatatype : public FARC_Datatype {
 
 };
 
-FARC_StructDatatype::FARC_StructDatatype(int count, int* blocklen, long*  displ, FARC_Datatype** types) {
+FARC_StructDatatype::FARC_StructDatatype(int count, int* blocklen, long*  displ, FARC_Datatype** types) : FARC_Datatype() {
 
     this->Count = count;
     for (int i=0; i<count; i++) Blocklen.push_back(blocklen[i]);
@@ -619,7 +633,7 @@ class FARC_HIndexedDatatype : public FARC_Datatype {
 
 };
 
-FARC_HIndexedDatatype::FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype) {
+FARC_HIndexedDatatype::FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype) : FARC_Datatype() {
 
     this->Count = count;
     this->Basetype = basetype;
@@ -729,6 +743,9 @@ Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value
 
 // this jits the pack/unpack functions
 void generate_pack_function(FARC_Datatype* ddt) {
+#if TIME
+    HRT_GET_TIMESTAMP(start);     
+#endif
 
     std::vector<std::string> Args;
     Args.push_back("inbuf");
@@ -763,12 +780,19 @@ void generate_pack_function(FARC_Datatype* ddt) {
 //    TheFPM->run(*F);
 //    F->dump();
 
-    TheExecutionEngine->runJITOnFunction(F);
-    ddt->packer = TheExecutionEngine->getPointerToFunction(F);
+    ddt->packer = (int (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
 
+#if TIME
+    HRT_GET_TIMESTAMP(stop);
+    HRT_GET_ELAPSED_TICKS(start, stop, &tmp);
+    commit_time += HRT_GET_USEC(tmp);
+#endif
 }
 
 void generate_unpack_function(FARC_Datatype* ddt) {
+#if TIME
+    HRT_GET_TIMESTAMP(start);     
+#endif
 
     std::vector<std::string> Args;
     Args.push_back("inbuf");
@@ -803,39 +827,45 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 //    TheFPM->run(*F);
 //    F->dump();
 
-    TheExecutionEngine->runJITOnFunction(F);
-    ddt->unpacker = TheExecutionEngine->getPointerToFunction(F);
+    ddt->unpacker = (int (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
 
+#if TIME
+    HRT_GET_TIMESTAMP(stop);
+    HRT_GET_ELAPSED_TICKS(start, stop, &tmp);
+    commit_time += HRT_GET_USEC(tmp);
+#endif
 }
 
 FARC_Datatype* FARC_DDT_Commit(FARC_Datatype* ddt) {
 
-//    This is usefull for debugging, as it allows us to call printf during jitting
-//    std::vector<llvm::Type*> printf_arg_types;
-//    printf_arg_types.push_back(Type::getInt8PtrTy(getGlobalContext()));
-//    FunctionType* printf_type = FunctionType::get(Type::getInt32Ty(getGlobalContext()), printf_arg_types, true);
-//    func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
-
+#if !LAZY
     generate_pack_function(ddt);
     generate_unpack_function(ddt);
+#endif
 
     return ddt;
 
 }
 
 // this calls the pack/unpack function
-void FARC_DDT_Pack(char* inbuf, char* outbuf, FARC_Datatype* ddt, int count) {
-
-     int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) ddt->packer;
-     FP(inbuf, count, outbuf);
-    
+void FARC_DDT_Pack(FARC_Datatype* ddt, void* inbuf, int count, void* outbuf) {
+#if LAZY
+    if (ddt->packer == NULL) generate_pack_function(ddt);
+#endif
+    ddt->packer(inbuf, count, outbuf);
 }
 
-void FARC_DDT_Unpack(char* inbuf, char* outbuf, FARC_Datatype* ddt, int count) {
+inline void FARC_DDT_Lazy_Unpack_Commit(FARC_Datatype* ddt) {
+#if LAZY
+    if (ddt->unpacker == NULL) generate_unpack_function(ddt);
+#endif
+}
 
-     int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) ddt->unpacker;
-     FP(inbuf, count, outbuf);
-    
+void FARC_DDT_Unpack(FARC_Datatype* ddt, void* inbuf, int count, void* outbuf) {
+#if LAZY
+    FARC_DDT_Lazy_Unpack_Commit(ddt);
+#endif
+    ddt->unpacker(inbuf, count, outbuf);
 }
 
 void FARC_DDT_Free(FARC_Datatype* ddt) {
@@ -846,6 +876,9 @@ void FARC_DDT_Free(FARC_Datatype* ddt) {
 
 // init the JIT compiler
 void FARC_DDT_Init() {
+#if TIME
+    HRT_INIT(1, g_timerfreq);
+#endif
 
     InitializeNativeTarget();
     LLVMContext &Context = getGlobalContext();
@@ -904,7 +937,12 @@ void FARC_DDT_Init() {
     // Set the global so the code gen can use this.
     TheFPM = OurFPM;
 */
+}
 
+void FARC_DDT_Finalize() {
+#if TIME
+    printf("Commit time: %10.3lf s\n", commit_time/1000000);
+#endif
 }
 
 #endif
