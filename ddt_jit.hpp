@@ -54,6 +54,9 @@ static std::map<std::string, Value*> NamedValues;
 static ExecutionEngine *TheExecutionEngine;
 //static FunctionPassManager *TheFPM;
 
+std::vector<std::string> Args;
+FunctionType *FT;
+
 /* Base class for all datatypes */
 class FARC_Datatype {
 
@@ -747,18 +750,6 @@ void generate_pack_function(FARC_Datatype* ddt) {
     HRT_GET_TIMESTAMP(start);     
 #endif
 
-    std::vector<std::string> Args;
-    Args.push_back("inbuf");
-    Args.push_back("count");
-    Args.push_back("outbuf");
-
-    std::vector<Type*> FuncArgs;
-    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    FuncArgs.push_back(Type::getInt32Ty(getGlobalContext()));
-    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
-
-    FunctionType *FT = FunctionType::get(Type::getInt32Ty(getGlobalContext()), FuncArgs, false);
-
     Function* F = Function::Create(FT, Function::ExternalLinkage, "packer", TheModule);
     // Set names for all arguments.
     unsigned Idx = 0;
@@ -794,22 +785,10 @@ void generate_unpack_function(FARC_Datatype* ddt) {
     HRT_GET_TIMESTAMP(start);     
 #endif
 
-    std::vector<std::string> Args;
-    Args.push_back("inbuf");
-    Args.push_back("count");
-    Args.push_back("outbuf");
-
-    std::vector<Type*> FuncArgs;
-    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    FuncArgs.push_back(Type::getInt32Ty(getGlobalContext()));
-    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
-
-    FunctionType *FT = FunctionType::get(Type::getInt32Ty(getGlobalContext()), FuncArgs, false);
-
     Function* F = Function::Create(FT, Function::ExternalLinkage, "unpacker", TheModule);
+
     // Set names for all arguments.
     unsigned Idx = 0;
-
     for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size(); ++AI, ++Idx) {
         AI->setName(Args[Idx]);
         NamedValues[Args[Idx]] = AI;
@@ -892,6 +871,17 @@ void FARC_DDT_Init() {
         fprintf(stderr, "Could not create ExecutionEngine: %s\n", ErrStr.c_str());
         exit(1);
     }
+
+    // Initialize some types used by all packers
+    std::vector<Type*> FuncArgs;
+    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
+    FuncArgs.push_back(Type::getInt32Ty(getGlobalContext()));
+    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
+    FT = FunctionType::get(Type::getInt32Ty(getGlobalContext()), FuncArgs, false);
+
+    Args.push_back("inbuf");
+    Args.push_back("count");
+    Args.push_back("outbuf");
 
 /*
     FunctionPassManager* OurFPM = new FunctionPassManager(TheModule);
