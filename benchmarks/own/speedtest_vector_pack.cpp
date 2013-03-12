@@ -12,13 +12,20 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     char* mpi_outbuf;
     char* farc_inbuf;
     char* farc_outbuf;
+    char* cpp_inbuf;
+    char* cpp_outbuf;
+    int jend, j;
+
     HRT_TIMESTAMP_T start, stop;
-    uint64_t mpi_type_create, farc_type_create, mpi_pack, farc_pack;
+    uint64_t mpi_type_create, farc_type_create, mpi_pack, farc_pack, cpp_pack;
 
     int data_size = sizeof(int)*inner_cnt * outer_cnt * blklen;
     int buffer_size = sizeof(int)*((inner_cnt-1)*stride+blklen) * outer_cnt;
 
     init_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+
+    cpp_inbuf = (char*)malloc(buffer_size);
+    cpp_outbuf = (char*)malloc(buffer_size);
 
     FARC_DDT_Init();
 
@@ -36,11 +43,11 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 	    MPI_Type_commit(&newtype);
 	    HRT_GET_TIMESTAMP(stop);
 	    HRT_GET_ELAPSED_TICKS(start, stop, &mpi_type_create);
-	
+
 	    for (int i=0; i<inner_runs; i++) {
 	
 	        HRT_GET_TIMESTAMP(start);
-	        FARC_DDT_Pack(farc_inbuf, farc_outbuf, t2, outer_cnt);
+	        FARC_DDT_Pack(t2, farc_inbuf, outer_cnt, farc_outbuf);
 	        HRT_GET_TIMESTAMP(stop);
 	        HRT_GET_ELAPSED_TICKS(start, stop, &farc_pack);
 
@@ -50,10 +57,22 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 	        HRT_GET_TIMESTAMP(stop);
 	        HRT_GET_ELAPSED_TICKS(start, stop, &mpi_pack);
 
+	        HRT_GET_TIMESTAMP(start);
+            for(j=0; j < inner_cnt; ++j) {
+                cpp_outbuf[j*5    ] = cpp_inbuf[j*stride*5];
+                cpp_outbuf[j*5 + 1] = cpp_inbuf[j*stride*5 + 1];
+                cpp_outbuf[j*5 + 2] = cpp_inbuf[j*stride*5 + 2];
+                cpp_outbuf[j*5 + 3] = cpp_inbuf[j*stride*5 + 3];
+                cpp_outbuf[j*5 + 4] = cpp_inbuf[j*stride*5 + 4];
+            }
+	        HRT_GET_TIMESTAMP(stop);
+	        HRT_GET_ELAPSED_TICKS(start, stop, &cpp_pack);
+
     	    static int firstline=1;
-    	    if (firstline) printf("%10s %10s %10s %10s %10s %10s %10s %10s %10s\n", "size", "mpi_create", "farc_create", "mpi_pack", "farc_pack", "blklen", "stride", "count", "pack_count");
+    	    if (firstline) printf("%10s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n", "size", "mpi_create", "farc_create", "cpp_pack", "mpi_pack", "farc_pack", "blklen", "stride", "count", "pack_count");
             firstline=0;
-    	    printf("%10i %10.3lf %10.3lf %10.3lf %10.3lf %10i %10i %10i %10i\n", data_size, HRT_GET_USEC(mpi_type_create), HRT_GET_USEC(farc_type_create), HRT_GET_USEC(mpi_pack), HRT_GET_USEC(farc_pack), blklen, stride, inner_cnt, outer_cnt);
+    	    printf("%10i %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10i %10i %10i %10i\n", data_size, HRT_GET_USEC(mpi_type_create), HRT_GET_USEC(farc_type_create), HRT_GET_USEC(cpp_pack), HRT_GET_USEC(mpi_pack), HRT_GET_USEC(farc_pack), blklen, stride, inner_cnt, outer_cnt);
+
 	    } 
 
 		MPI_Type_free(&newtype);
@@ -62,6 +81,9 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 	
     }
 	
+//  int res = compare_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+//  test_result(res);
+
 	free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
 }
