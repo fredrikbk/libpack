@@ -33,7 +33,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
-#define LAZY 0
+#define LAZY 1
 #define TIME 0
 
 #if TIME
