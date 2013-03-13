@@ -5,19 +5,18 @@
 #include <vector>
 #include <cstdio>
 
-#define TRUNK 1
-#if TRUNK
-#include "llvm/IR/Module.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Intrinsics.h"
-#else
+#if LLVM32
 #include "llvm/Module.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/IRBuilder.h"
 #include "llvm/Intrinsics.h"
+#else
+#include "llvm/IR/Module.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Intrinsics.h"
 #endif
 
 #include "llvm/Support/TargetSelect.h"

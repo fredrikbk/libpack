@@ -3,7 +3,14 @@
 
 #include <vector>
 #include <mpi.h>
+
+#define LLVM32 1
+
+#if LLVM32
+#include <llvm/Value.h>
+#else
 #include <llvm/IR/Value.h>
+#endif
 
 #define LAZY 1
 #define TIME 0
