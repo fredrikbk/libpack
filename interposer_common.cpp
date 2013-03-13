@@ -6,12 +6,9 @@
 
 #include "ddt_jit.hpp"
 
-#if TIME
 #include "copy_benchmark/hrtimer/hrtimer.h"
 static HRT_TIMESTAMP_T start, stop;
 static uint64_t tmp;
-double malloc_time = 0.0;
-#endif
 
 struct recvop {
     void* buf;
@@ -46,9 +43,6 @@ void interposer_init() {
 
 void interposer_finalize() {
     FARC_DDT_Finalize();
-#if TIME
-    printf("Malloc time: %10.3lf s\n", malloc_time/1000000);
-#endif
 }
 
 void interposer_hvector(int count, int blocklength, MPI_Aint stride, MPI_Datatype oldtype, MPI_Datatype *newtype) {
@@ -120,28 +114,27 @@ void interposer_free(MPI_Datatype *datatype) {
     FARC_DDT_Free(g_my_types[*datatype]);
 }
 
-// OPT: Allocate buffer on stack or cache buffers in a map keyed on sizes
+const int scratch_size = 2 * 1024 * 1024;
+static char scratch[scratch_size];
+
 char* interposer_buffer_alloc(int count, MPI_Datatype datatype, int* buf_size) {
+    char *buf;
+
     *buf_size = g_my_types[datatype]->getSize() * count;
 
-    char *buf;
-#if TIME
-    HRT_GET_TIMESTAMP(start);     
-#endif
+    static int max_buf_size = 0;
+    if (*buf_size > max_buf_size) {
+        printf("Buffer size: %d\n", *buf_size);
+        max_buf_size = *buf_size;
+    }
 
-    buf =(char*) malloc(*buf_size);
-
-#if TIME
-    HRT_GET_TIMESTAMP(stop);
-    HRT_GET_ELAPSED_TICKS(start, stop, &tmp);
-    malloc_time += HRT_GET_USEC(tmp);
-#endif
+    buf = (*buf_size > scratch_size) ? (char*) malloc(*buf_size) : scratch;
 
     return buf;
 }
 
 void interposer_buffer_free(char* buf) {
-    free(buf);
+    if (buf != scratch) free(buf);
 }
 
 void interposer_buffer_register(MPI_Request* request, char* buf) {
