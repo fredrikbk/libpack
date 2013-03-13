@@ -23,8 +23,8 @@
 #include "llvm/ExecutionEngine/JIT.h"
 
 
-#define LLVM_OUTPUT    1 
-#define LLVM_OPTIMIZE  1 
+#define LLVM_OUTPUT    0 
+#define LLVM_OPTIMIZE  0 
 
 #if LLVM_OUTPUT
 #include "llvm/Analysis/Verifier.h"
