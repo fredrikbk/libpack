@@ -1,14 +1,20 @@
-CXX=clang++
-CC=clang++
+CXX=mpic++
+CC=mpicc
 
 LDLIBS=$(shell llvm-config --libs all)
-LDFLAGS=$(shell llvm-config --ldflags) -lmpich
-CPPFLAGS=-g3 $(shell llvm-config --cppflags) -I/usr/include/mpi 
+LDFLAGS=$(shell llvm-config --ldflags) #-dynamic
+CPPFLAGS= -O3 $(shell llvm-config --cppflags) -I../..
 
 BINARIES=$(shell ls *.cpp | sed -e 's/.cpp$$//g';)
 
 all: $(BINARIES)
 	./runtests.sh
+
+%.o: %.cpp
+	$(CXX) -c -o $@ $< $(CPPFLAGS)
+
+%: %.o ../ddt_jit.o
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 -include Makefile.deps
 

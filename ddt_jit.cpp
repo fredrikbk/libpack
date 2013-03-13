@@ -18,22 +18,27 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Intrinsics.h"
 #endif
-
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 
-/*
+
+#define LLVM_OUTPUT    1 
+#define LLVM_OPTIMIZE  1 
+
+#if LLVM_OUTPUT
 #include "llvm/Analysis/Verifier.h"
-#include "llvm/Analysis/Passes.h"
+#endif
+#if LLVM_OPTIMIZE
 #include "llvm/PassManager.h"
+#include "llvm/Analysis/Passes.h"
 #include "llvm/LinkAllPasses.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-*/
+static llvm::FunctionPassManager *TheFPM;
+#endif
 
 #define SUPPORT_TIMING 0
-
 #if TIME
 #define SUPPORT_TIMING 1
 #include "copy_benchmark/hrtimer/hrtimer.h"
@@ -46,6 +51,7 @@ static double prof_time= 0.0;
 unsigned long long g_timerfreq;
 #endif
 
+
 using namespace llvm;
 
 static Function* func; // printf function for debugging
@@ -53,7 +59,6 @@ static Module *TheModule;
 static IRBuilder<> Builder(getGlobalContext());
 static std::map<std::string, Value*> NamedValues;
 static ExecutionEngine *TheExecutionEngine;
-//static FunctionPassManager *TheFPM;
 
 std::vector<std::string> Args;
 FunctionType *FT;
@@ -661,9 +666,15 @@ void generate_pack_function(FARC_Datatype* ddt) {
     Value* RetVal = ddt->Codegen_Pack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
     Builder.CreateRet(RetVal);
 
-//    verifyFunction(*F);
-//    TheFPM->run(*F);
-//    F->dump();
+#if LLVM_OUTPUT
+    verifyFunction(*F);
+#endif
+#if LLVM_OPTIMIZE
+    TheFPM->run(*F);
+#endif
+#if LLVM_OUTPUT
+    F->dump();
+#endif
 
     ddt->packer = (int (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
 
@@ -696,9 +707,15 @@ void generate_unpack_function(FARC_Datatype* ddt) {
     Value* RetVal = ddt->Codegen_Unpack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
     Builder.CreateRet(RetVal);
 
-//    verifyFunction(*F);
-//    TheFPM->run(*F);
-//    F->dump();
+#if LLVM_OUTPUT
+    verifyFunction(*F);
+#endif
+#if LLVM_OPTIMIZE
+    TheFPM->run(*F);
+#endif
+#if LLVM_OUTPUT
+    F->dump();
+#endif
 
     ddt->unpacker = (int (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
 
@@ -777,15 +794,17 @@ void FARC_DDT_Init() {
     Args.push_back("count");
     Args.push_back("outbuf");
 
-/*
+
+#if LLVM_OPTIMIZE
     FunctionPassManager* OurFPM = new FunctionPassManager(TheModule);
 
-//    PassManagerBuilder Builder;
-//    Builder.OptLevel = 3;
-//    Builder.Vectorize = true;
-//    Builder.LoopVectorize = true;
-//    Builder.populateFunctionPassManager(*OurFPM);
-
+    /*
+    PassManagerBuilder Builder;
+    Builder.OptLevel = 3;
+    Builder.Vectorize = true;
+    Builder.LoopVectorize = true;
+    Builder.populateFunctionPassManager(*OurFPM);
+    */
 
     // Set up the optimizer pipeline.  Start with registering info about how the
     // target lays out data structures.
@@ -817,10 +836,10 @@ void FARC_DDT_Init() {
     OurFPM->add(createAggressiveDCEPass());
     OurFPM->doInitialization();
 
-
     // Set the global so the code gen can use this.
     TheFPM = OurFPM;
-*/
+#endif
+
 }
 
 void FARC_DDT_Finalize() {
