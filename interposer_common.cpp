@@ -187,15 +187,28 @@ void interposer_free(MPI_Datatype *datatype) {
 
 // TODO: Implement segmenting (and possibly reduce buffer size)
 const int scratch_size = 2 * 1024 * 1024;
+bool scratch_in_use = false;
 static char scratch[scratch_size];
 
 char* interposer_buffer_alloc(int count, MPI_Datatype datatype, int* buf_size) {
     *buf_size = datatype_retrieve(datatype)->getSize() * count;
-    return (*buf_size > scratch_size) ? (char*) malloc(*buf_size) : scratch;
+
+    if (*buf_size <= scratch_size && !scratch_in_use) {
+        scratch_in_use = true;
+        return scratch;
+    }
+    else {
+        return (char*) malloc(*buf_size);
+    }
 }
 
 void interposer_buffer_free(char* buf) {
-    if (buf != scratch) free(buf);
+    if (buf != scratch) {
+        free(buf);
+    }
+    else {
+        scratch_in_use = true;
+    }
 }
 
 void interposer_buffer_register(MPI_Request* request, char* buf) {
