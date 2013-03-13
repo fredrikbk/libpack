@@ -57,7 +57,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
         for (int i=0; i<inner_runs; i++) {
             HRT_GET_TIMESTAMP(start);
             if (rank == 0) {
-                FARC_DDT_Pack(t2, farc_inbuf, outer_cnt, farc_outbuf);
+                FARC_DDT_Pack(farc_inbuf, farc_outbuf, t2, outer_cnt);
                 PMPI_Send(farc_outbuf, t2_size, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
             }
             else {

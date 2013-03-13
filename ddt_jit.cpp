@@ -722,7 +722,7 @@ FARC_Datatype* FARC_DDT_Commit(FARC_Datatype* ddt) {
 }
 
 // this calls the pack/unpack function
-void FARC_DDT_Pack(FARC_Datatype* ddt, void* inbuf, int count, void* outbuf) {
+void FARC_DDT_Pack(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count) {
 #if LAZY
     if (ddt->packer == NULL) generate_pack_function(ddt);
 #endif
@@ -735,7 +735,7 @@ void FARC_DDT_Lazy_Unpack_Commit(FARC_Datatype* ddt) {
 #endif
 }
 
-void FARC_DDT_Unpack(FARC_Datatype* ddt, void* inbuf, int count, void* outbuf) {
+void FARC_DDT_Unpack(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count) {
 #if LAZY
     FARC_DDT_Lazy_Unpack_Commit(ddt);
 #endif

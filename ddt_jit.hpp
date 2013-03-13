@@ -134,8 +134,8 @@ FARC_Datatype* FARC_DDT_Commit(FARC_Datatype* ddt);
 void FARC_DDT_Lazy_Unpack_Commit(FARC_Datatype* ddt);  // This function should be removed
 void FARC_DDT_Free(FARC_Datatype* ddt);
 
-void FARC_DDT_Pack(FARC_Datatype* ddt, void* inbuf, int count, void* outbuf);
-void FARC_DDT_Unpack(FARC_Datatype* ddt, void* inbuf, int count, void* outbuf);
+void FARC_DDT_Pack(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count);
+void FARC_DDT_Unpack(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count);
 
 #endif
 

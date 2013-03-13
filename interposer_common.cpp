@@ -12,15 +12,21 @@
 static HRT_TIMESTAMP_T start, stop;
 static uint64_t tmp;
 
-struct recvop {
-    void* buf;
-    void* shaddow;
+struct Request {
+    void* tmpbuf;
+
+    // If it is a Irecv op
+    void* usrbuf;
     int count;
     MPI_Datatype datatype;
 };
 
-static std::map<MPI_Request, char*> g_my_buffers;
-static std::map<MPI_Request, struct recvop> g_my_recv_reqs;
+static inline bool is_recv(Request req) {
+    return req.usrbuf != NULL;
+}
+
+
+static std::map<MPI_Request, struct Request> g_outstanding_requests;
 
 
 /* Datatype lookup data structures */
@@ -190,7 +196,7 @@ const int scratch_size = 2 * 1024 * 1024;
 bool scratch_in_use = false;
 static char scratch[scratch_size];
 
-char* interposer_buffer_alloc(int count, MPI_Datatype datatype, int* buf_size) {
+void* interposer_buffer_alloc(int count, MPI_Datatype datatype, int* buf_size) {
     *buf_size = datatype_retrieve(datatype)->getSize() * count;
 
     if (*buf_size <= scratch_size && !scratch_in_use) {
@@ -198,45 +204,73 @@ char* interposer_buffer_alloc(int count, MPI_Datatype datatype, int* buf_size) {
         return scratch;
     }
     else {
-        return (char*) malloc(*buf_size);
+        return malloc(*buf_size);
     }
 }
 
-void interposer_buffer_free(char* buf) {
-    if (buf != scratch) {
-        free(buf);
+void interposer_buffer_free(void* tmpbuf) {
+    if (tmpbuf != scratch) {
+        free(tmpbuf);
     }
     else {
         scratch_in_use = true;
     }
 }
 
-void interposer_buffer_register(MPI_Request* request, char* buf) {
-    g_my_buffers[*request] = buf;
-}
-
-void interposer_recvop_register(void *data, int count, MPI_Datatype datatype, char* buf, MPI_Request *request) {
-    struct recvop rop;
-    rop.buf = data;
-    rop.count = count;
-    rop.datatype = datatype;
-    rop.shaddow = buf;
-    g_my_recv_reqs[*request] = rop;
-
-    FARC_DDT_Lazy_Unpack_Commit(datatype_retrieve(datatype));
-}
-
-char* interposer_pack(void *data, int count, MPI_Datatype datatype, int *buf_size) {
-    char* buf = interposer_buffer_alloc(count, datatype, buf_size);
-    FARC_DDT_Pack(datatype_retrieve(datatype), data, count, buf);
+void* interposer_pack(void *data, int count, MPI_Datatype datatype, int *buf_size) {
+    void* buf = interposer_buffer_alloc(count, datatype, buf_size);
+    FARC_DDT_Pack(data, buf, datatype_retrieve(datatype), count);
     return buf;
 }
 
-void interposer_unpack(void *data, int count, MPI_Datatype datatype, char* buf) {
-    FARC_DDT_Unpack(datatype_retrieve(datatype), buf, count, data);
+void interposer_unpack(void *data, int count, MPI_Datatype datatype, void* buf) {
+    FARC_DDT_Unpack(buf, data, datatype_retrieve(datatype), count);
+}
+
+void interposer_request_register(void *tmpbuf, void *usrbuf, int count, MPI_Datatype datatype, MPI_Request *request) {
+    struct Request req;
+    req.tmpbuf = tmpbuf;
+
+    req.usrbuf = usrbuf;
+    req.count = count;
+    req.datatype = datatype;
+    g_outstanding_requests[*request] = req;
+
+    if (tmpbuf != NULL && is_recv(req)) {
+        FARC_DDT_Lazy_Unpack_Commit(datatype_retrieve(datatype));
+    }
+}
+
+void interposer_request_free(const MPI_Request &request) {
+    struct Request req = g_outstanding_requests[request];
+    if (req.tmpbuf != NULL) {
+        // If it was a recv request then unpack it 
+        if (is_recv(req)) {
+            FARC_DDT_Unpack(req.tmpbuf, req.usrbuf, datatype_retrieve(req.datatype), req.count);
+        }
+        interposer_buffer_free(req.tmpbuf);
+    }
+    g_outstanding_requests.erase(request);
 }
 
 //**********************************************************
+
+
+//TODO we should also implement testany, testsome, waitany, waitsome to be complete, but who uses those :D
+int MPI_Wait(MPI_Request *request, MPI_Status *status) {
+    int ret;
+
+    if (*request != MPI_REQUEST_NULL) {
+        MPI_Request oldrequest = *request;
+        ret = PMPI_Wait(request, status);
+        interposer_request_free(oldrequest);
+    }
+    else {
+        ret = PMPI_Wait(request, status);
+    }
+
+    return ret;
+}
 
 int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_statuses) {
 
@@ -252,16 +286,21 @@ int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_
     // now go over them and unpack recv requests and free buffers
     for (int i=0; i<count; i++) {
         if (oldrequests[i] != MPI_REQUEST_NULL) {
-             //check if it was a recvop, if yes, unpack TODO this is expensive :-(
-            std::map<MPI_Request, struct recvop>::iterator it;
-            it = g_my_recv_reqs.find(oldrequests[i]);
-            if (it != g_my_recv_reqs.end()) {
-                FARC_DDT_Unpack(datatype_retrieve(it->second.datatype), it->second.shaddow, it->second.count, it->second.buf);
-                g_my_recv_reqs.erase(it);
+            interposer_request_free(oldrequests[i]);
+        }
+
+        /*
+             //check if it was a Request, if yes, unpack TODO this is expensive :-(
+            std::map<MPI_Request, struct Request>::iterator it;
+            it = g_my_recv_requests.find(oldrequests[i]);
+            if (it != g_my_recv_requests.end()) {
+                FARC_DDT_Unpack(it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
+                g_my_recv_requests.erase(it);
             }
             interposer_buffer_free(g_my_buffers[oldrequests[i]]);
             g_my_buffers.erase(oldrequests[i]);
         }
+        */
     }
 
     free(oldrequests);
@@ -269,7 +308,45 @@ int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_
     return ret;
 }
 
+
+// TODO: MPI_Test and MPI_TestAll look buggy to me... How can we free buffers if
+//       we don't check whether the test passed?
+int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
+    printf("Whoaa!");
+
+    int ret;
+
+    if (*request != MPI_REQUEST_NULL) {
+        MPI_Request oldrequest = *request;
+        ret = PMPI_Test(request, flag, status);
+        interposer_request_free(oldrequest);
+        
+        /*    
+        The following line must surely be a bug?
+//        if (*request == MPI_REQUEST_NULL) {
+             //check if it was a Request, if yes, unpack TODO this is expensive :-(
+            std::map<MPI_Request, struct Request>::iterator it;
+            it = g_my_recv_requests.find(oldrequest);
+            if (it != g_my_recv_requests.end()) {
+                FARC_DDT_Unpack(it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
+                g_my_recv_requests.erase(it);
+            }
+           
+            interposer_buffer_free(g_my_buffers[oldrequest]);
+            g_my_buffers.erase(oldrequest);
+        }
+        */
+    }
+    else {
+        ret = PMPI_Test(request, flag, status);
+    }
+
+    return ret;
+
+}
+
 int MPI_Testall(int count, MPI_Request *array_of_requests, int *flag, MPI_Status *array_of_statuses) {
+    printf("Whoaa!");
 
     // we need to copy the old requests here :-( (they will become MPI_REQUEST_NULL)
     MPI_Request* oldrequests = (MPI_Request*) malloc(count * sizeof(MPI_Request));
@@ -282,15 +359,21 @@ int MPI_Testall(int count, MPI_Request *array_of_requests, int *flag, MPI_Status
     // now go over them and unpack recv requests and free buffers
     for (int i=0; i<count; i++) {
         if ((oldrequests[i] != MPI_REQUEST_NULL) && (array_of_requests[i] == MPI_REQUEST_NULL)) {
-             //check if it was a recvop, if yes, unpack TODO this is expensive :-(
-            std::map<MPI_Request, struct recvop>::iterator it;
-            it = g_my_recv_reqs.find(oldrequests[i]);
-            if (it != g_my_recv_reqs.end()) {
-                FARC_DDT_Unpack(datatype_retrieve(it->second.datatype), it->second.shaddow, it->second.count, it->second.buf);
-                g_my_recv_reqs.erase(it);
+
+            interposer_request_free(oldrequests[i]);
+
+            /*
+             //check if it was a Request, if yes, unpack TODO this is expensive :-(
+            std::map<MPI_Request, struct Request>::iterator it;
+            it = g_my_recv_requests.find(oldrequests[i]);
+            if (it != g_my_recv_requests.end()) {
+                FARC_DDT_Unpack( it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
+                g_my_recv_requests.erase(it);
             }
             interposer_buffer_free(g_my_buffers[oldrequests[i]]);
             g_my_buffers.erase(oldrequests[i]);
+            */
+
         }
     }
 
@@ -299,64 +382,6 @@ int MPI_Testall(int count, MPI_Request *array_of_requests, int *flag, MPI_Status
     return ret;
 
 }
-
-//TODO we should also implement testany, testsome, waitany, waitsome to be complete, but who uses those :D
-
-int MPI_Wait(MPI_Request *request, MPI_Status *status) {
-
-    int ret;
-
-    if (*request != MPI_REQUEST_NULL) {
-        MPI_Request oldrequest = *request;
-        ret = PMPI_Wait(request, status);
-
-        //check if it was a recvop, if yes, unpack TODO this is expensive :-(
-        std::map<MPI_Request, struct recvop>::iterator it;
-        it = g_my_recv_reqs.find(oldrequest);
-        if (it != g_my_recv_reqs.end()) {
-            FARC_DDT_Unpack(datatype_retrieve(it->second.datatype), it->second.shaddow, it->second.count, it->second.buf);
-            g_my_recv_reqs.erase(it);
-        }
-
-        interposer_buffer_free(g_my_buffers[oldrequest]);
-        g_my_buffers.erase(oldrequest);
-    }
-    else {
-        ret = PMPI_Wait(request, status);
-    }
-
-    return ret;
-
-}
-
-int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
-
-    int ret;
-
-    if (*request != MPI_REQUEST_NULL) {
-        MPI_Request oldrequest = *request;
-        ret = PMPI_Test(request, flag, status);
-        if (*request == MPI_REQUEST_NULL) {
-             //check if it was a recvop, if yes, unpack TODO this is expensive :-(
-            std::map<MPI_Request, struct recvop>::iterator it;
-            it = g_my_recv_reqs.find(oldrequest);
-            if (it != g_my_recv_reqs.end()) {
-                FARC_DDT_Unpack(datatype_retrieve(it->second.datatype), it->second.shaddow, it->second.count, it->second.buf);
-                g_my_recv_reqs.erase(it);
-            }
-           
-            interposer_buffer_free(g_my_buffers[oldrequest]);
-            g_my_buffers.erase(oldrequest);
-        }
-    }
-    else {
-        ret = PMPI_Test(request, flag, status);
-    }
-
-    return ret;
-
-}
-
 
 
 
@@ -411,27 +436,24 @@ extern "C" {
         interposer_free(datatype);
     }
 
-    char* interposer_buffer_alloc_(int count, MPI_Datatype datatype, int* buf_size) {
+    void* interposer_buffer_alloc_(int count, MPI_Datatype datatype, int* buf_size) {
         return interposer_buffer_alloc(count, datatype, buf_size);
     }
 
-    void interposer_buffer_free_(char* buf) {
-        interposer_buffer_free(buf);
+    void interposer_buffer_free_(void* tmpbuf) {
+    printf("There\n");
+        interposer_buffer_free(tmpbuf);
     }
 
-    void interposer_buffer_register_(MPI_Request* request, char* buf) {
-        interposer_buffer_register(request, buf);
+    void interposer_request_register_(void *tmpbuf, void *usrbuf, int count, MPI_Datatype datatype, void* buf, MPI_Request *request) {
+        interposer_request_register(tmpbuf, usrbuf, count, datatype, request);
     }
 
-    void interposer_recvop_register_(void *data, int count, MPI_Datatype datatype, char* buf, MPI_Request *request) {
-        interposer_recvop_register(data, count, datatype, buf, request);
-    }
-
-    char* interposer_pack_(void *data, int count, MPI_Datatype datatype, int *buf_size) {
+    void* interposer_pack_(void *data, int count, MPI_Datatype datatype, int *buf_size) {
         return interposer_pack(data, count, datatype, buf_size);
     }
 
-    void interposer_unpack_(void *data, int count, MPI_Datatype datatype, char* buf) {
+    void interposer_unpack_(void *data, int count, MPI_Datatype datatype, void* buf) {
         interposer_unpack(data, count, datatype, buf);
     }
 }

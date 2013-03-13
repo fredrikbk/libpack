@@ -81,7 +81,7 @@ int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI
     // TODO check other primitive types!
     if (datatype != MPI_DOUBLE) {
         int outsize;
-        char *outbuf = interposer_pack(buf, count, datatype, &outsize);
+        void *outbuf = interposer_pack(buf, count, datatype, &outsize);
 
         PMPI_Send(outbuf, outsize, MPI_BYTE, dest, tag, comm);
 
@@ -95,30 +95,11 @@ int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI
     return MPI_SUCCESS;
 }
 
-int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm, MPI_Request *request) {
-    // TODO check other primitive types!
-    if (datatype != MPI_DOUBLE) {
-        int outsize;
-        char *outbuf = interposer_pack(buf, count, datatype, &outsize);
-    
-        PMPI_Isend(outbuf, outsize, MPI_BYTE, dest, tag, comm, request);
-
-        interposer_buffer_register(request, outbuf);
-        return MPI_SUCCESS;
-    }
-    else {
-        PMPI_Isend(buf, count, MPI_DOUBLE, dest, tag, comm, request);
-        interposer_buffer_register(request, NULL);
-    }
-
-    return MPI_SUCCESS;
-}
-
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status) {
     // TODO check other primitive types!
     if (datatype != MPI_DOUBLE) {
         int insize;
-        char* inbuf = interposer_buffer_alloc(count, datatype, &insize);
+        void* inbuf = interposer_buffer_alloc(count, datatype, &insize);
 
         PMPI_Recv(inbuf, insize, MPI_BYTE, source, tag, comm, status);
 
@@ -134,24 +115,39 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, M
     return MPI_SUCCESS;
 }
 
-int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Request *request) {
-
+int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm, MPI_Request *request) {
     // TODO check other primitive types!
+    if (datatype != MPI_DOUBLE) {
+        int outsize;
+        void *outbuf = interposer_pack(buf, count, datatype, &outsize);
+    
+        PMPI_Isend(outbuf, outsize, MPI_BYTE, dest, tag, comm, request);
 
+        interposer_request_register(outbuf, NULL, 0, 0, request);
+        return MPI_SUCCESS;
+    }
+    else {
+        PMPI_Isend(buf, count, MPI_DOUBLE, dest, tag, comm, request);
+        interposer_request_register(NULL, NULL, 0, 0, request);
+    }
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Request *request) {
+    // TODO check other primitive types!
     if (datatype != MPI_DOUBLE) {
         int insize;
-        char* inbuf = interposer_buffer_alloc(count, datatype, &insize);
+        void* inbuf = interposer_buffer_alloc(count, datatype, &insize);
 
         PMPI_Irecv(inbuf, insize, MPI_BYTE, source, tag, comm, request);
 
-        interposer_buffer_register(request, inbuf);
-        interposer_recvop_register(buf, count, datatype, inbuf, request);
-
+        interposer_request_register(inbuf, buf, count, datatype, request);
         return MPI_SUCCESS;
     }
     else {
         PMPI_Irecv(buf, count, MPI_DOUBLE, source, tag, comm, request);
-        interposer_buffer_register(request, NULL);
+        interposer_request_register(NULL, NULL, 0, 0, request);
     }
 
     return MPI_SUCCESS;
