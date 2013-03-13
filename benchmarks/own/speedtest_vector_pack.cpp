@@ -1,6 +1,6 @@
 #include <string>
 
-#include "../../ddt_jit.hpp"
+#include <ddt_jit.hpp>
 #include "../../tests/test.hpp"
 #include "../../copy_benchmark/hrtimer/hrtimer.h"
 
@@ -30,34 +30,33 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     FARC_DDT_Init();
 
     for (int o=0; o<outer_runs; o++) {
-	    HRT_GET_TIMESTAMP(start);
-	    FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_INT);
-	    FARC_Datatype* t2 = new FARC_VectorDatatype(t1, inner_cnt, blklen, stride);
-	   	FARC_DDT_Commit(t2);
-	    HRT_GET_TIMESTAMP(stop);
-	    HRT_GET_ELAPSED_TICKS(start, stop, &farc_type_create);
+        HRT_GET_TIMESTAMP(start);
+        FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_INT);
+        FARC_Datatype* t2 = new FARC_VectorDatatype(t1, inner_cnt, blklen, stride);
+        FARC_DDT_Commit(t2);
+        HRT_GET_TIMESTAMP(stop);
+        HRT_GET_ELAPSED_TICKS(start, stop, &farc_type_create);
 	
-	    HRT_GET_TIMESTAMP(start);
-	    MPI_Datatype newtype;
-	    MPI_Type_vector(inner_cnt, blklen, stride, MPI_INT, &newtype);
-	    MPI_Type_commit(&newtype);
-	    HRT_GET_TIMESTAMP(stop);
-	    HRT_GET_ELAPSED_TICKS(start, stop, &mpi_type_create);
+        HRT_GET_TIMESTAMP(start);
+        MPI_Datatype newtype;
+        MPI_Type_vector(inner_cnt, blklen, stride, MPI_INT, &newtype);
+        MPI_Type_commit(&newtype);
+        HRT_GET_TIMESTAMP(stop);
+        HRT_GET_ELAPSED_TICKS(start, stop, &mpi_type_create);
 
-	    for (int i=0; i<inner_runs; i++) {
-	
-	        HRT_GET_TIMESTAMP(start);
-	        FARC_DDT_Pack(t2, farc_inbuf, outer_cnt, farc_outbuf);
-	        HRT_GET_TIMESTAMP(stop);
-	        HRT_GET_ELAPSED_TICKS(start, stop, &farc_pack);
+        for (int i=0; i<inner_runs; i++) {
+            HRT_GET_TIMESTAMP(start);
+            FARC_DDT_Pack(t2, farc_inbuf, outer_cnt, farc_outbuf);
+            HRT_GET_TIMESTAMP(stop);
+            HRT_GET_ELAPSED_TICKS(start, stop, &farc_pack);
 
-	        HRT_GET_TIMESTAMP(start);
-	        int position = 0;
-	        MPI_Pack(mpi_inbuf, outer_cnt, newtype, mpi_outbuf, buffer_size*sizeof(int), &position, MPI_COMM_WORLD);
-	        HRT_GET_TIMESTAMP(stop);
-	        HRT_GET_ELAPSED_TICKS(start, stop, &mpi_pack);
-
-	        HRT_GET_TIMESTAMP(start);
+            HRT_GET_TIMESTAMP(start);
+            int position = 0;
+            MPI_Pack(mpi_inbuf, outer_cnt, newtype, mpi_outbuf, buffer_size*sizeof(int), &position, MPI_COMM_WORLD);
+            HRT_GET_TIMESTAMP(stop);
+            HRT_GET_ELAPSED_TICKS(start, stop, &mpi_pack);
+	      
+            HRT_GET_TIMESTAMP(start);
             for(j=0; j < inner_cnt; ++j) {
                 cpp_outbuf[j*5    ] = cpp_inbuf[j*stride*5];
                 cpp_outbuf[j*5 + 1] = cpp_inbuf[j*stride*5 + 1];
@@ -65,26 +64,26 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
                 cpp_outbuf[j*5 + 3] = cpp_inbuf[j*stride*5 + 3];
                 cpp_outbuf[j*5 + 4] = cpp_inbuf[j*stride*5 + 4];
             }
-	        HRT_GET_TIMESTAMP(stop);
-	        HRT_GET_ELAPSED_TICKS(start, stop, &cpp_pack);
+            HRT_GET_TIMESTAMP(stop);
+            HRT_GET_ELAPSED_TICKS(start, stop, &cpp_pack);
 
-    	    static int firstline=1;
-    	    if (firstline) printf("%10s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n", "size", "mpi_create", "farc_create", "cpp_pack", "mpi_pack", "farc_pack", "blklen", "stride", "count", "pack_count");
+            static int firstline=1;
+            if (firstline) printf("%10s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n", "size", "mpi_create", "farc_create", "cpp_pack", "mpi_pack", "farc_pack", "blklen", "stride", "count", "pack_count");
             firstline=0;
-    	    printf("%10i %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10i %10i %10i %10i\n", data_size, HRT_GET_USEC(mpi_type_create), HRT_GET_USEC(farc_type_create), HRT_GET_USEC(cpp_pack), HRT_GET_USEC(mpi_pack), HRT_GET_USEC(farc_pack), blklen, stride, inner_cnt, outer_cnt);
+            printf("%10i %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10i %10i %10i %10i\n", data_size, HRT_GET_USEC(mpi_type_create), HRT_GET_USEC(farc_type_create), HRT_GET_USEC(cpp_pack), HRT_GET_USEC(mpi_pack), HRT_GET_USEC(farc_pack), blklen, stride, inner_cnt, outer_cnt);
 
-	    } 
+        } 
 
-		MPI_Type_free(&newtype);
-		FARC_DDT_Free(t1);
-		FARC_DDT_Free(t2);
-	
-    }
+        MPI_Type_free(&newtype);
+        FARC_DDT_Free(t1);
+        FARC_DDT_Free(t2);
+
+	  }
 	
 //  int res = compare_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 //  test_result(res);
 
-	free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+    free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
 }
 
