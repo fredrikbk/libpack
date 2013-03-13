@@ -4,6 +4,7 @@
 #include <string>
 #include <map>
 #include <queue>
+#include <list>
 #include <mpi.h>
 
 #include "ddt_jit.hpp"
@@ -13,6 +14,8 @@ static HRT_TIMESTAMP_T start, stop;
 static uint64_t tmp;
 
 struct Request {
+    MPI_Request *mpi_req;
+
     void* tmpbuf;
 
     // If it is a Irecv op
@@ -25,9 +28,7 @@ static inline bool is_recv(Request req) {
     return req.usrbuf != NULL;
 }
 
-
-static std::map<MPI_Request*, struct Request> g_outstanding_requests;
-
+static std::list<struct Request> g_outstanding_requests; 
 
 /* Datatype lookup data structures */
 #define DDT_FAST_CACHE_SIZE 50
@@ -234,7 +235,7 @@ void interposer_request_register(void *tmpbuf, void *usrbuf, int count, MPI_Data
     req.usrbuf = usrbuf;
     req.count = count;
     req.datatype = datatype;
-    g_outstanding_requests[request] = req;
+    g_outstanding_requests.push_back(req);
 
     if (tmpbuf != NULL && is_recv(req)) {
         FARC_DDT_Lazy_Unpack_Commit(datatype_retrieve(datatype));
@@ -242,15 +243,22 @@ void interposer_request_register(void *tmpbuf, void *usrbuf, int count, MPI_Data
 }
 
 void interposer_request_free(MPI_Request *request) {
-    struct Request req = g_outstanding_requests[request];
-    if (req.tmpbuf != NULL) {
-        // If it was a recv request then unpack it 
-        if (is_recv(req)) {
-            FARC_DDT_Unpack(req.tmpbuf, req.usrbuf, datatype_retrieve(req.datatype), req.count);
+    for (std::list<Request>::iterator req = g_outstanding_requests.begin();
+            req != g_outstanding_requests.end(); req++) {
+        if (req->mpi_req == request) {
+            if (req->tmpbuf != NULL) {
+                // If it was a recv request then unpack it 
+                if (is_recv(*req)) {
+                    FARC_DDT_Unpack(req->tmpbuf, req->usrbuf, datatype_retrieve(req->datatype), req->count);
+                }
+                interposer_buffer_free(req->tmpbuf);
+            }
+
+
+            g_outstanding_requests.erase(req);
+            break;
         }
-        interposer_buffer_free(req.tmpbuf);
     }
-    g_outstanding_requests.erase(request);
 }
 
 //**********************************************************
