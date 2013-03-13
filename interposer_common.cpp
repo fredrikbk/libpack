@@ -1,8 +1,15 @@
 #include "interposer_common.h"
+
+#include <cstdlib>
 #include <string>
+#include <map>
+
 #include "ddt_jit.hpp"
 
 #if TIME
+#include "copy_benchmark/hrtimer/hrtimer.h"
+static HRT_TIMESTAMP_T start, stop;
+static uint64_t tmp;
 double malloc_time = 0.0;
 #endif
 
@@ -156,17 +163,11 @@ char* interposer_pack(void *data, int count, MPI_Datatype datatype, int *buf_siz
     char* buf = interposer_buffer_alloc(count, datatype, buf_size);
     FARC_DDT_Pack(g_my_types[datatype], data, count, buf);
 
-//    int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[datatype]->packer;
-//    FP(data, count, buf);
-
     return buf;
 }
 
 void interposer_unpack(void *data, int count, MPI_Datatype datatype, char* buf) {
     FARC_DDT_Unpack(g_my_types[datatype], buf, count, data);
-
-//    int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[datatype]->unpacker;
-//    FP(buf, count, data);
 }
 
 //**********************************************************
@@ -189,8 +190,6 @@ int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_
             std::map<MPI_Request, struct recvop>::iterator it;
             it = g_my_recv_reqs.find(oldrequests[i]);
             if (it != g_my_recv_reqs.end()) {
-//                int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[it->second.datatype]->unpacker;
-//                FP(it->second.shaddow, it->second.count, it->second.buf);
                 FARC_DDT_Unpack(g_my_types[it->second.datatype], it->second.shaddow, it->second.count, it->second.buf);
                 g_my_recv_reqs.erase(it);
             }
@@ -221,8 +220,6 @@ int MPI_Testall(int count, MPI_Request *array_of_requests, int *flag, MPI_Status
             std::map<MPI_Request, struct recvop>::iterator it;
             it = g_my_recv_reqs.find(oldrequests[i]);
             if (it != g_my_recv_reqs.end()) {
-//                int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[it->second.datatype]->unpacker;
-//                FP(it->second.shaddow, it->second.count, it->second.buf);
                 FARC_DDT_Unpack(g_my_types[it->second.datatype], it->second.shaddow, it->second.count, it->second.buf);
                 g_my_recv_reqs.erase(it);
             }
@@ -251,8 +248,6 @@ int MPI_Wait(MPI_Request *request, MPI_Status *status) {
         std::map<MPI_Request, struct recvop>::iterator it;
         it = g_my_recv_reqs.find(oldrequest);
         if (it != g_my_recv_reqs.end()) {
-//            int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[it->second.datatype]->unpacker;
-//            FP(it->second.shaddow, it->second.count, it->second.buf);
             FARC_DDT_Unpack(g_my_types[it->second.datatype], it->second.shaddow, it->second.count, it->second.buf);
             g_my_recv_reqs.erase(it);
         }
@@ -280,8 +275,6 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
             std::map<MPI_Request, struct recvop>::iterator it;
             it = g_my_recv_reqs.find(oldrequest);
             if (it != g_my_recv_reqs.end()) {
-//                int (*FP)(void*, int, void*) = (int (*)(void*, int, void*))(intptr_t) g_my_types[it->second.datatype]->unpacker;
-//                FP(it->second.shaddow, it->second.count, it->second.buf);
                 FARC_DDT_Unpack(g_my_types[it->second.datatype], it->second.shaddow, it->second.count, it->second.buf);
                 g_my_recv_reqs.erase(it);
             }
