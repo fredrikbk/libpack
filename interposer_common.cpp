@@ -230,6 +230,8 @@ void interposer_unpack(void *data, int count, MPI_Datatype datatype, void* buf) 
 
 void interposer_request_register(void *tmpbuf, void *usrbuf, int count, MPI_Datatype datatype, MPI_Request *request) {
     struct Request req;
+    req.mpi_req = request;
+
     req.tmpbuf = tmpbuf;
 
     req.usrbuf = usrbuf;
@@ -269,9 +271,8 @@ int MPI_Wait(MPI_Request *request, MPI_Status *status) {
     int ret;
 
     if (*request != MPI_REQUEST_NULL) {
-        MPI_Request oldrequest = *request;
         ret = PMPI_Wait(request, status);
-        interposer_request_free(&oldrequest);
+        interposer_request_free(request);
     }
     else {
         ret = PMPI_Wait(request, status);
@@ -294,7 +295,7 @@ int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_
     // now go over them and unpack recv requests and free buffers
     for (int i=0; i<count; i++) {
         if (oldrequests[i] != MPI_REQUEST_NULL) {
-            interposer_request_free(&oldrequests[i]);
+            interposer_request_free(&array_of_requests[i]);
         }
 
         /*
@@ -325,9 +326,8 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
     int ret;
 
     if (*request != MPI_REQUEST_NULL) {
-        MPI_Request oldrequest = *request;
         ret = PMPI_Test(request, flag, status);
-        interposer_request_free(&oldrequest);
+        interposer_request_free(request);
         
         /*    
         The following line must surely be a bug?
@@ -368,7 +368,7 @@ int MPI_Testall(int count, MPI_Request *array_of_requests, int *flag, MPI_Status
     for (int i=0; i<count; i++) {
         if ((oldrequests[i] != MPI_REQUEST_NULL) && (array_of_requests[i] == MPI_REQUEST_NULL)) {
 
-            interposer_request_free(&oldrequests[i]);
+            interposer_request_free(&array_of_requests[i]);
 
             /*
              //check if it was a Request, if yes, unpack TODO this is expensive :-(

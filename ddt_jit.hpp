@@ -5,7 +5,7 @@
 #include <mpi.h>
 #include <llvm/IR/Value.h>
 
-#define LAZY 0
+#define LAZY 1
 #define TIME 0
 
 /* Base class for all datatypes */
