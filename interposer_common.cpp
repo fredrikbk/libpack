@@ -26,7 +26,7 @@ static inline bool is_recv(Request req) {
 }
 
 
-static std::map<MPI_Request, struct Request> g_outstanding_requests;
+static std::map<MPI_Request*, struct Request> g_outstanding_requests;
 
 
 /* Datatype lookup data structures */
@@ -234,14 +234,14 @@ void interposer_request_register(void *tmpbuf, void *usrbuf, int count, MPI_Data
     req.usrbuf = usrbuf;
     req.count = count;
     req.datatype = datatype;
-    g_outstanding_requests[*request] = req;
+    g_outstanding_requests[request] = req;
 
     if (tmpbuf != NULL && is_recv(req)) {
         FARC_DDT_Lazy_Unpack_Commit(datatype_retrieve(datatype));
     }
 }
 
-void interposer_request_free(const MPI_Request &request) {
+void interposer_request_free(MPI_Request *request) {
     struct Request req = g_outstanding_requests[request];
     if (req.tmpbuf != NULL) {
         // If it was a recv request then unpack it 
@@ -263,7 +263,7 @@ int MPI_Wait(MPI_Request *request, MPI_Status *status) {
     if (*request != MPI_REQUEST_NULL) {
         MPI_Request oldrequest = *request;
         ret = PMPI_Wait(request, status);
-        interposer_request_free(oldrequest);
+        interposer_request_free(&oldrequest);
     }
     else {
         ret = PMPI_Wait(request, status);
@@ -286,7 +286,7 @@ int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_
     // now go over them and unpack recv requests and free buffers
     for (int i=0; i<count; i++) {
         if (oldrequests[i] != MPI_REQUEST_NULL) {
-            interposer_request_free(oldrequests[i]);
+            interposer_request_free(&oldrequests[i]);
         }
 
         /*
@@ -319,7 +319,7 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
     if (*request != MPI_REQUEST_NULL) {
         MPI_Request oldrequest = *request;
         ret = PMPI_Test(request, flag, status);
-        interposer_request_free(oldrequest);
+        interposer_request_free(&oldrequest);
         
         /*    
         The following line must surely be a bug?
@@ -360,7 +360,7 @@ int MPI_Testall(int count, MPI_Request *array_of_requests, int *flag, MPI_Status
     for (int i=0; i<count; i++) {
         if ((oldrequests[i] != MPI_REQUEST_NULL) && (array_of_requests[i] == MPI_REQUEST_NULL)) {
 
-            interposer_request_free(oldrequests[i]);
+            interposer_request_free(&oldrequests[i]);
 
             /*
              //check if it was a Request, if yes, unpack TODO this is expensive :-(
