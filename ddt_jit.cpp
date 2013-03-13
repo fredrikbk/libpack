@@ -33,7 +33,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 */
 
-#define SUPPORT_TIMING 1
+#define SUPPORT_TIMING 0
 
 #if TIME
 #define SUPPORT_TIMING 1

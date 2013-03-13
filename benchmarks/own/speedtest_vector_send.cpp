@@ -5,7 +5,7 @@
 #include "../../tests/test.hpp"
 #include "../../copy_benchmark/hrtimer/hrtimer.h"
 
-extern unsigned long long g_timerfreq;
+unsigned long long g_timerfreq;
 
 void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int inner_runs, int outer_runs) {
 

@@ -9,9 +9,9 @@
 
 #include "ddt_jit.hpp"
 
-#include "copy_benchmark/hrtimer/hrtimer.h"
-static HRT_TIMESTAMP_T start, stop;
-static uint64_t tmp;
+//#include "copy_benchmark/hrtimer/hrtimer.h"
+//static HRT_TIMESTAMP_T start, stop;
+//static uint64_t tmp;
 
 struct Request {
     MPI_Request *mpi_req;
