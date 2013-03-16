@@ -63,6 +63,12 @@ static ExecutionEngine *TheExecutionEngine;
 std::vector<std::string> Args;
 FunctionType *FT;
 
+#define INT8PTR  Type::getInt8PtrTy(getGlobalContext())
+
+#define INT32    Type::getInt32Ty(getGlobalContext())
+#define INT64    Type::getInt64Ty(getGlobalContext())
+
+
 /* Codegen Functions */
 Value* multNode(int op1, Value* op2PtrNode) {
     Value* op1Node = ConstantInt::get(getGlobalContext(), APInt(64, op1, false));
@@ -93,52 +99,11 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
 
     Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
-    // Outer loop
-    BasicBlock *Preheader_outer_BB = Builder.GetInsertBlock();
-    BasicBlock *Loop_outer_BB = BasicBlock::Create(getGlobalContext(), "outerloop", TheFunction);
-    Builder.CreateBr(Loop_outer_BB);
-    Builder.SetInsertPoint(Loop_outer_BB);
-
-    // Induction var phi nodes
-    PHINode *out_outer = Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "out");
-    out_outer->addIncoming(outbuf, Preheader_outer_BB);
-    PHINode *in_outer= Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "in");
-    in_outer->addIncoming(inbuf, Preheader_outer_BB);
-    PHINode *i = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
-    i->addIncoming(constNode(0), Preheader_outer_BB);
-
-    
-    // Inner loop
-    BasicBlock *Preheader_inner_BB = Builder.GetInsertBlock();
-    BasicBlock *Loop_inner_BB = BasicBlock::Create(getGlobalContext(), "innerloop", TheFunction);
-    Builder.CreateBr(Loop_inner_BB);
-    Builder.SetInsertPoint(Loop_inner_BB);
-
-    // Induction var phi nodes
-    PHINode *out_inner = Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "out1");
-    out_inner->addIncoming(out_outer, Preheader_inner_BB);
-    PHINode *in_inner= Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "in1");
-    in_inner->addIncoming(in_outer, Preheader_inner_BB);
-    PHINode *j = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "j");
-    j->addIncoming(constNode(0), Preheader_inner_BB);
-
-
-    // Basetype Code Generation
-    if (pack) basetype->Codegen_Pack(in_inner, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out_inner);
-    else      basetype->Codegen_Unpack(in_inner, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out_inner);
-
-
-    // Increment the out ptr by Size(Basetype) * Blocklen
-    Value* out_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_out, false));
-    Value* out_addr_cvi = Builder.CreatePtrToInt(out_inner, Type::getInt64Ty(getGlobalContext()));
-    Value* out_addr = Builder.CreateAdd(out_addr_cvi, out_bytes_to_stride);
-    Value* nextout_inner = Builder.CreateIntToPtr(out_addr, Type::getInt8PtrTy(getGlobalContext()));
-
-    // Increment the in ptr by Extend(Basetype) * Stride
-    Value* in_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_in, false));
-    Value* in_addr_cvi = Builder.CreatePtrToInt(in_inner, Type::getInt64Ty(getGlobalContext()));
-    Value* in_addr = Builder.CreateAdd(in_addr_cvi, in_bytes_to_stride);
-    Value* nextin_inner = Builder.CreateIntToPtr(in_addr, Type::getInt8PtrTy(getGlobalContext()));
+    // Entry block
+    Value* out = Builder.CreatePtrToInt(outbuf, INT64);
+    out->setName("out");
+    Value* in = Builder.CreatePtrToInt(inbuf, INT64);
+    in->setName("in");
 
     /*
     // Prefetch
@@ -151,6 +116,54 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     args.push_back(constNode(1));
     Builder.CreateCall(fun, args);
     */
+
+
+    // Outer loop
+    BasicBlock *Preheader_outer_BB = Builder.GetInsertBlock();
+    BasicBlock *Loop_outer_BB = BasicBlock::Create(getGlobalContext(), "outerloop", TheFunction);
+    Builder.CreateBr(Loop_outer_BB);
+    Builder.SetInsertPoint(Loop_outer_BB);
+
+    // Induction var phi nodes
+    PHINode *out1 = Builder.CreatePHI(INT64, 2, "out1");
+    out1->addIncoming(out, Preheader_outer_BB);
+    PHINode *in1= Builder.CreatePHI(INT64, 2, "in1");
+    in1->addIncoming(in, Preheader_outer_BB);
+    PHINode *i = Builder.CreatePHI(INT32, 2, "i");
+    i->addIncoming(constNode(0), Preheader_outer_BB);
+
+    
+    // Inner loop
+    BasicBlock *Preheader_inner_BB = Builder.GetInsertBlock();
+    BasicBlock *Loop_inner_BB = BasicBlock::Create(getGlobalContext(), "innerloop", TheFunction);
+    Builder.CreateBr(Loop_inner_BB);
+    Builder.SetInsertPoint(Loop_inner_BB);
+
+    // Induction var phi nodes
+    PHINode *out2 = Builder.CreatePHI(INT64, 2, "out2");
+    out2->addIncoming(out1, Preheader_inner_BB);
+    PHINode *in2= Builder.CreatePHI(INT64, 2, "in2");
+    in2->addIncoming(in1, Preheader_inner_BB);
+    PHINode *j = Builder.CreatePHI(INT32, 2, "j");
+    j->addIncoming(constNode(0), Preheader_inner_BB);
+
+    // Cast out2 and in2 to pointers
+    Value* out2_addr = Builder.CreateIntToPtr(out2, INT8PTR);
+    out2_addr->setName("out2_addr");
+    Value* in2_addr = Builder.CreateIntToPtr(in2, INT8PTR);
+    in2_addr->setName("in2_addr");
+
+
+    // Basetype Code Generation
+    if (pack) basetype->Codegen_Pack(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
+    else      basetype->Codegen_Unpack(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
+
+    
+    // Increment out2 and in2
+    Value* nextout2 = Builder.CreateAdd(out2, constNode((long)elemstride_out));
+    nextout2->setName("nextout2");
+    Value* nextin2 = Builder.CreateAdd(in2, constNode((long)elemstride_in));
+    nextin2->setName("nextin2");
 
     // Increment inner loop index
     Value* stepj = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
@@ -166,23 +179,24 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     Builder.SetInsertPoint(After_inner_BB);
 
     // Add backedges for the inner loop induction variables
-    out_inner->addIncoming(nextout_inner, LoopEnd_inner_BB);
-    in_inner->addIncoming(nextin_inner, LoopEnd_inner_BB);
+    out2->addIncoming(nextout2, LoopEnd_inner_BB);
+    in2->addIncoming(nextin2, LoopEnd_inner_BB);
     j->addIncoming(nextj, LoopEnd_inner_BB);
 
 
     // Move the the extend-stride ptr back Extend(Basetype) * Stride - Size(Basetype) * Blocklen  
-    Value* nextin_outer = NULL;
-    Value* nextout_outer = NULL;
+    Value* nextin1 = NULL;
+    Value* nextout1 = NULL;
     if (pack) {
-        nextout_outer = nextout_inner;
-        Value* nextin_outer_val = Builder.CreateAdd(in_addr_cvi, out_bytes_to_stride );
-        nextin_outer = Builder.CreateIntToPtr(nextin_outer_val, Type::getInt8PtrTy(getGlobalContext()));
+        nextout1 = nextout2;
+        nextin1 = Builder.CreateAdd(in2, constNode((long)elemstride_out));
+        nextin1->setName("nextin1");
     }
     else {
-        Value* nextout_outer_val = Builder.CreateAdd(out_addr_cvi, in_bytes_to_stride );
-        nextout_outer = Builder.CreateIntToPtr(nextout_outer_val, Type::getInt8PtrTy(getGlobalContext()));
-        nextin_outer = nextin_inner; 
+        nextout1 = Builder.CreateAdd(out2, constNode((long)elemstride_in));
+        nextout1->setName("nextout1");
+
+        nextin1 = nextin2;
     }
 
     // Increment outer loop index
@@ -196,8 +210,8 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     Builder.SetInsertPoint(After_outer_BB);
 
     // Add backedges for the outer loop induction variable
-    out_outer->addIncoming(nextout_outer, LoopEnd_outer_BB);
-    in_outer->addIncoming(nextin_outer, LoopEnd_outer_BB);
+    out1->addIncoming(nextout1, LoopEnd_outer_BB);
+    in1->addIncoming(nextin1, LoopEnd_outer_BB);
     i->addIncoming(nexti, LoopEnd_outer_BB);
 }
 
