@@ -19,8 +19,8 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     HRT_TIMESTAMP_T start, stop;
     uint64_t mpi_type_create, farc_type_create, mpi_pack, farc_pack, cpp_pack;
 
-    int data_size = sizeof(int)*inner_cnt * outer_cnt * blklen;
-    int buffer_size = sizeof(int)*((inner_cnt-1)*stride+blklen) * outer_cnt;
+    int data_size = sizeof(double)*inner_cnt * outer_cnt * blklen;
+    int buffer_size = sizeof(double)*((inner_cnt-1)*stride+blklen) * outer_cnt;
 
     init_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
@@ -31,7 +31,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 
     for (int o=0; o<outer_runs; o++) {
         HRT_GET_TIMESTAMP(start);
-        FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_INT);
+        FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_DOUBLE);
         FARC_Datatype* t2 = new FARC_VectorDatatype(t1, inner_cnt, blklen, stride);
         FARC_DDT_Commit(t2);
         HRT_GET_TIMESTAMP(stop);
@@ -39,7 +39,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 	
         HRT_GET_TIMESTAMP(start);
         MPI_Datatype newtype;
-        MPI_Type_vector(inner_cnt, blklen, stride, MPI_INT, &newtype);
+        MPI_Type_vector(inner_cnt, blklen, stride, MPI_DOUBLE, &newtype);
         MPI_Type_commit(&newtype);
         HRT_GET_TIMESTAMP(stop);
         HRT_GET_ELAPSED_TICKS(start, stop, &mpi_type_create);
@@ -80,8 +80,8 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 
 	  }
 	
-//  int res = compare_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
-//  test_result(res);
+//    int res = compare_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+//    test_result(res);
 
     free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
