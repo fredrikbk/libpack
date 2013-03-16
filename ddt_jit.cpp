@@ -140,8 +140,8 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     Value* in_addr = Builder.CreateAdd(in_addr_cvi, in_bytes_to_stride);
     Value* nextin_inner = Builder.CreateIntToPtr(in_addr, Type::getInt8PtrTy(getGlobalContext()));
 
+    /*
     // Prefetch
-/*
     std::vector<Type *> arg_type;
     Function *fun = Intrinsic::getDeclaration(TheFunction->getParent(), Intrinsic::prefetch, arg_type);
     std::vector<Value*> args;
@@ -150,7 +150,7 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     args.push_back(constNode(1));
     args.push_back(constNode(1));
     Builder.CreateCall(fun, args);
-*/
+    */
 
     // Increment inner loop index
     Value* stepj = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
@@ -674,6 +674,17 @@ void generate_pack_function(FARC_Datatype* ddt) {
 #endif
 #if LLVM_OUTPUT
     F->dump();
+
+    std::vector<Type *> arg_type;
+    arg_type.push_back(Type::getInt8PtrTy(getGlobalContext()));
+    arg_type.push_back(Type::getInt8PtrTy(getGlobalContext()));
+    arg_type.push_back(Type::getInt64Ty(getGlobalContext()));
+    Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
+    memcopy->dump();
+
+    std::vector<Type *> prefetch_arg_type;
+    Function *prefetch = Intrinsic::getDeclaration(TheModule, Intrinsic::prefetch, prefetch_arg_type);
+    prefetch->dump();
 #endif
 
     ddt->packer = (int (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
@@ -715,6 +726,17 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 #endif
 #if LLVM_OUTPUT
     F->dump();
+
+    std::vector<Type *> arg_type;
+    arg_type.push_back(Type::getInt8PtrTy(getGlobalContext()));
+    arg_type.push_back(Type::getInt8PtrTy(getGlobalContext()));
+    arg_type.push_back(Type::getInt64Ty(getGlobalContext()));
+    Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
+    memcopy->dump();
+
+    std::vector<Type *> prefetch_arg_type;
+    Function *prefetch = Intrinsic::getDeclaration(TheModule, Intrinsic::prefetch, prefetch_arg_type);
+    prefetch->dump();
 #endif
 
     ddt->unpacker = (int (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
