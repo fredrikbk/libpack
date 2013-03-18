@@ -15,8 +15,8 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     char* farc_outbuf;
     char* interposer_inbuf;
     char* interposer_outbuf;
-    char* cpp_inbuf;
-    char* cpp_outbuf;
+    double* cpp_inbuf;
+    double* cpp_outbuf;
     int jend, j;
 
     HRT_TIMESTAMP_T start, stop;
@@ -29,7 +29,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     int buffer_size = sizeof(double)*((inner_cnt-1)*stride+blklen) * outer_cnt;
 
     init_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
-    init_buffers(buffer_size, &interposer_inbuf, &cpp_inbuf, &interposer_outbuf, &cpp_outbuf);
+    init_buffers(buffer_size, &interposer_inbuf, ((char**)&cpp_inbuf), &interposer_outbuf, ((char**)&cpp_outbuf));
 
     for (int o=0; o<outer_runs; o++) {
         HRT_GET_TIMESTAMP(start);
