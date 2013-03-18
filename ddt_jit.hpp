@@ -26,8 +26,8 @@ class FARC_Datatype {
     virtual int getExtend() = 0;
     virtual int getSize() = 0;
 
-    int (*packer)(void*, int, void*);
-    int (*unpacker)(void*, int, void*);
+    void (*packer)(void*, int, void*);
+    void (*unpacker)(void*, int, void*);
 
 };
 

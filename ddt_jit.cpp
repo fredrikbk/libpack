@@ -25,6 +25,7 @@
 
 #define LLVM_OUTPUT    0 
 #define LLVM_OPTIMIZE  0 
+#define LLVM_VERIFY    LLVM_OUTPUT 
 
 #if LLVM_OUTPUT
 #include "llvm/Analysis/Verifier.h"
@@ -63,16 +64,16 @@ static ExecutionEngine *TheExecutionEngine;
 std::vector<std::string> Args;
 FunctionType *FT;
 
-#define INT8PTR  Type::getInt8PtrTy(getGlobalContext())
-
+#define VOID     Type::getVoidTy(getGlobalContext())
 #define INT32    Type::getInt32Ty(getGlobalContext())
 #define INT64    Type::getInt64Ty(getGlobalContext())
+#define INT8PTR  Type::getInt8PtrTy(getGlobalContext())
 
 
 /* Codegen Functions */
 Value* multNode(int op1, Value* op2PtrNode) {
     Value* op1Node = ConstantInt::get(getGlobalContext(), APInt(64, op1, false));
-    Value* op2Node = Builder.CreateIntCast(op2PtrNode, Type::getInt64Ty(getGlobalContext()), false); 
+    Value* op2Node = Builder.CreateIntCast(op2PtrNode, INT64, false); 
     return Builder.CreateMul(op1Node, op2Node);
 }
 
@@ -88,23 +89,14 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
         int count, int blocklen, int elemstride_in, int elemstride_out, bool pack) {
     /** for debugging **   
     std::vector<llvm::Type*> printf_arg_types;
-    printf_arg_types.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    FunctionType* printf_type = FunctionType::get(Type::getInt32Ty(getGlobalContext()), printf_arg_types, true);
+    printf_arg_types.push_back(INT8PTR);
+    FunctionType* printf_type = FunctionType::get(INT32, printf_arg_types, true);
     Function *func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
     Value *fmt_ptr = Builder.CreateGlobalStringPtr("stride to add: %i\n\0");
     Value *fmt_ptr2 = Builder.CreateGlobalStringPtr("restore stride\n\0");
     // now we can print as follows:
     //llvm::CallInst *call = builder.CreateCall2(func, fmt_ptr, ValueToPrint);
     */
-
-    Function *TheFunction = Builder.GetInsertBlock()->getParent();
-
-    // Entry block
-    Value* out = Builder.CreatePtrToInt(outbuf, INT64);
-    out->setName("out");
-    Value* in = Builder.CreatePtrToInt(inbuf, INT64);
-    in->setName("in");
-
     /*
     // Prefetch
     std::vector<Type *> arg_type;
@@ -115,7 +107,15 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     args.push_back(constNode(1));
     args.push_back(constNode(1));
     Builder.CreateCall(fun, args);
-    */
+    */    
+
+    Function *TheFunction = Builder.GetInsertBlock()->getParent();
+
+    // Entry block
+    Value* out = Builder.CreatePtrToInt(outbuf, INT64);
+    out->setName("out");
+    Value* in = Builder.CreatePtrToInt(inbuf, INT64);
+    in->setName("in");
 
 
     // Outer loop
@@ -132,6 +132,17 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     PHINode *i = Builder.CreatePHI(INT32, 2, "i");
     i->addIncoming(constNode(0), Preheader_outer_BB);
 
+    // Compute the size of the data written to the out buffer in the inner loop
+    Value* nextin1 = NULL;
+    Value* nextout1 = NULL;
+    if (pack) {
+        nextout1 = Builder.CreateAdd(out1, constNode(count * (long)elemstride_out));
+        nextout1->setName("nextout1");
+    } 
+    else {
+        nextin1 = Builder.CreateAdd(in1, constNode(count * (long)elemstride_in));
+        nextin1->setName("nextin1");
+    }
     
     // Inner loop
     BasicBlock *Preheader_inner_BB = Builder.GetInsertBlock();
@@ -144,8 +155,6 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     out2->addIncoming(out1, Preheader_inner_BB);
     PHINode *in2= Builder.CreatePHI(INT64, 2, "in2");
     in2->addIncoming(in1, Preheader_inner_BB);
-    PHINode *j = Builder.CreatePHI(INT32, 2, "j");
-    j->addIncoming(constNode(0), Preheader_inner_BB);
 
     // Cast out2 and in2 to pointers
     Value* out2_addr = Builder.CreateIntToPtr(out2, INT8PTR);
@@ -165,12 +174,8 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     Value* nextin2 = Builder.CreateAdd(in2, constNode((long)elemstride_in));
     nextin2->setName("nextin2");
 
-    // Increment inner loop index
-    Value* stepj = ConstantInt::get(getGlobalContext(), APInt(32, 1, false));
-    Value* nextj = Builder.CreateAdd(j, constNode(1), "nextj");
-    
     // check if we are finished with the loop over count
-    Value* EndCond_inner = Builder.CreateICmpEQ(nextj, constNode(count), "innercond");
+    Value* EndCond_inner = Builder.CreateICmpEQ(nextout2, nextout1, "innercond");
                             
     // Create and branch to the inner loop postamble
     BasicBlock *LoopEnd_inner_BB = Builder.GetInsertBlock();
@@ -181,22 +186,16 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     // Add backedges for the inner loop induction variables
     out2->addIncoming(nextout2, LoopEnd_inner_BB);
     in2->addIncoming(nextin2, LoopEnd_inner_BB);
-    j->addIncoming(nextj, LoopEnd_inner_BB);
 
 
     // Move the the extend-stride ptr back Extend(Basetype) * Stride - Size(Basetype) * Blocklen  
-    Value* nextin1 = NULL;
-    Value* nextout1 = NULL;
     if (pack) {
-        nextout1 = nextout2;
-        nextin1 = Builder.CreateAdd(in2, constNode((long)elemstride_out));
+        nextin1 = Builder.CreateAdd(in1, constNode((long)(elemstride_in * (count-1) + elemstride_out)));
         nextin1->setName("nextin1");
     }
     else {
-        nextout1 = Builder.CreateAdd(out2, constNode((long)elemstride_in));
+        nextout1 = Builder.CreateAdd(out2, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
         nextout1->setName("nextout1");
-
-        nextin1 = nextin2;
     }
 
     // Increment outer loop index
@@ -250,7 +249,7 @@ Value* FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value*
     Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
 
     // return 0 for now
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 
 }
 
@@ -280,11 +279,11 @@ void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbu
     Builder.SetInsertPoint(LoopBB);
 
     // Induction var phi nodes
-    PHINode *out = Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "out");
+    PHINode *out = Builder.CreatePHI(INT8PTR, 2, "out");
     out->addIncoming(outbuf, PreheaderBB);
-    PHINode *in= Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "in");
+    PHINode *in= Builder.CreatePHI(INT8PTR, 2, "in");
     in->addIncoming(inbuf, PreheaderBB);
-    PHINode *i = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
+    PHINode *i = Builder.CreatePHI(INT32, 2, "i");
     i->addIncoming(constNode(0), PreheaderBB);
 
 
@@ -295,15 +294,15 @@ void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbu
 
     // Increment the out ptr by Size(Basetype) * Blocklen
     Value* out_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_out * this->Count, false));
-    Value* out_addr_cvi = Builder.CreatePtrToInt(out, Type::getInt64Ty(getGlobalContext()));
+    Value* out_addr_cvi = Builder.CreatePtrToInt(out, INT64);
     Value* out_addr = Builder.CreateAdd(out_addr_cvi, out_bytes_to_stride);
-    Value* nextout = Builder.CreateIntToPtr(out_addr, Type::getInt8PtrTy(getGlobalContext()));
+    Value* nextout = Builder.CreateIntToPtr(out_addr, INT8PTR);
 
     // Increment the in ptr by Extend(Basetype) * Stride
     Value* in_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_in * this->Count, false));
-    Value* in_addr_cvi = Builder.CreatePtrToInt(in, Type::getInt64Ty(getGlobalContext()));
+    Value* in_addr_cvi = Builder.CreatePtrToInt(in, INT64);
     Value* in_addr = Builder.CreateAdd(in_addr_cvi, in_bytes_to_stride);
-    Value* nextin = Builder.CreateIntToPtr(in_addr, Type::getInt8PtrTy(getGlobalContext()));
+    Value* nextin = Builder.CreateIntToPtr(in_addr, INT8PTR);
 
     // Increment outer loop index
     Value* nexti = Builder.CreateAdd(i, constNode(1), "nexti");
@@ -323,12 +322,12 @@ void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbu
 
 Value* FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, incount, outbuf, this->Basetype->getExtend(), this->Basetype->getSize(), true);
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 }
 
 Value* FARC_ContiguousDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, incount, outbuf, this->Basetype->getSize(), this->Basetype->getExtend(), false);
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 }
 
 
@@ -344,13 +343,13 @@ int FARC_VectorDatatype::getSize() {
 Value* FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count,
             this->Blocklen, this->Basetype->getExtend() * this->Stride, this->Basetype->getSize() * this->Blocklen, true);
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 }
 
 Value* FARC_VectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Basetype->getSize() * this->Blocklen, this->Basetype->getExtend() * this->Stride, false);
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 }
 
 
@@ -370,13 +369,13 @@ int FARC_HVectorDatatype::getSize() {
 Value* FARC_HVectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Stride, this->Basetype->getSize() * this->Blocklen, true);
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 }
 
 Value* FARC_HVectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Basetype->getSize() * this->Blocklen, this->Stride, false);
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 }
 
 
@@ -426,9 +425,9 @@ void FARC_HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Valu
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Base address of the input buffer
-    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, Type::getInt64Ty(getGlobalContext()));
+    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, INT64);
     Value* extend = constNode((long)this->getExtend());
-    Value* incount_64 = Builder.CreateZExt(incount, Type::getInt64Ty(getGlobalContext()));
+    Value* incount_64 = Builder.CreateZExt(incount, INT64);
     Value* incount_expanded = Builder.CreateMul(incount_64, extend);
 
     // Loop
@@ -437,12 +436,12 @@ void FARC_HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Valu
     Builder.CreateBr(LoopBB);
     Builder.SetInsertPoint(LoopBB);
 
-    PHINode *compact = Builder.CreatePHI(Type::getInt8PtrTy(getGlobalContext()), 2, "compact");
+    PHINode *compact = Builder.CreatePHI(INT8PTR, 2, "compact");
     compact->addIncoming(compactbuf, PreheaderBB);
-    PHINode* i = Builder.CreatePHI(Type::getInt64Ty(getGlobalContext()), 2, "i");
+    PHINode* i = Builder.CreatePHI(INT64, 2, "i");
     i->addIncoming(constNode(0l), PreheaderBB);
 
-    Value* compact_addr = Builder.CreatePtrToInt(compact, Type::getInt64Ty(getGlobalContext()));
+    Value* compact_addr = Builder.CreatePtrToInt(compact, INT64);
 
     // OPT: Make this the loop counter
     Value* scattered_disp_base = Builder.CreateAdd(scatteredbuf_orig_int, i);
@@ -452,7 +451,7 @@ void FARC_HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Valu
         // Set the scattered ptr to scattered_disp_base + this->Disl[i]
         Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
         Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
-        Value* scattered = Builder.CreateIntToPtr(scattered_disp, Type::getInt8PtrTy(getGlobalContext()));
+        Value* scattered = Builder.CreateIntToPtr(scattered_disp, INT8PTR);
 
         if (pack) Basetype->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), nextcompact);
         else      Basetype->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), scattered);
@@ -460,7 +459,7 @@ void FARC_HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Valu
         // Increment the compact ptr by Size(Basetype) * Blocklen
         Value* compact_bytes_to_stride = constNode((long)Basetype->getSize() * this->Blocklen[i]);
         compact_addr = Builder.CreateAdd(compact_addr, compact_bytes_to_stride);
-        nextcompact = Builder.CreateIntToPtr(compact_addr, Type::getInt8PtrTy(getGlobalContext()));
+        nextcompact = Builder.CreateIntToPtr(compact_addr, INT8PTR);
     }
 
     // Increment the loop index and test for loop exit
@@ -481,12 +480,12 @@ void FARC_HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Valu
 
 Value* FARC_HIndexedDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(outbuf, inbuf, incount, true);
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 }
 
 Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, outbuf, incount, false);
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 }
 
 
@@ -534,7 +533,7 @@ Value* FARC_StructDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Value
     Value* CounterValue = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
     // save inbuf ptr so that we can calculate inbuf = inbuf_orig + i * extend for each iter over incount
     Value* inbuf_orig = Builder.CreateLoad(inbuf_ptr);
-    Value* inbuf_orig_int = Builder.CreatePtrToInt(inbuf_orig, Type::getInt64Ty(getGlobalContext()));
+    Value* inbuf_orig_int = Builder.CreatePtrToInt(inbuf_orig, INT64);
     Value* extend = ConstantInt::get(getGlobalContext(), APInt(32, this->getExtend(), false));
                             
     // Make the new basic block for the loop header, inserting after current block.
@@ -549,21 +548,21 @@ Value* FARC_StructDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Value
     Builder.SetInsertPoint(LoopBB);
                             
     // Start the PHI node with an entry for Start.
-    PHINode* Variable = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
+    PHINode* Variable = Builder.CreatePHI(INT32, 2, "i");
     Variable->addIncoming(CounterValue, PreheaderBB);
                             
     // Emit the body of the loop:
 
     //inbuf = inbuf_old + incount_i * extend
     Value* incnt_i_mul_ext_32 = Builder.CreateMul(Variable, extend);
-    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, Type::getInt64Ty(getGlobalContext()));
+    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, INT64);
     Value* inbuf_new_int = Builder.CreateAdd(inbuf_orig_int, incnt_i_mul_ext_64);
 
     for (int i=0; i<this->Count; i++) {
         // inbuf_displ = inptr_new + displ[i]
         Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
         Value* inbuf_displ_int = Builder.CreateAdd(inbuf_new_int, displ_i);
-        Value* inbuf_displ = Builder.CreateIntToPtr(inbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
+        Value* inbuf_displ = Builder.CreateIntToPtr(inbuf_displ_int, INT8PTR);
         Builder.CreateStore(inbuf_displ, inbuf_ptr);
         this->Types[i]->Codegen_Pack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
     }
@@ -588,7 +587,7 @@ Value* FARC_StructDatatype::Codegen_Pack(Value* inbuf_ptr, Value* incount, Value
     // Add a new entry to the PHI node for the backedge.
     Variable->addIncoming(NextVar, LoopEndBB);
 
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 
 }
 
@@ -598,7 +597,7 @@ Value* FARC_StructDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Val
     Value* CounterValue = ConstantInt::get(getGlobalContext(), APInt(32, 0, false));
     // save outbuf ptr so that we can calculate outbuf = outbuf_orig + i * extend for each iter over incount
     Value* outbuf_orig = Builder.CreateLoad(outbuf_ptr);
-    Value* outbuf_orig_int = Builder.CreatePtrToInt(outbuf_orig, Type::getInt64Ty(getGlobalContext()));
+    Value* outbuf_orig_int = Builder.CreatePtrToInt(outbuf_orig, INT64);
     Value* extend = ConstantInt::get(getGlobalContext(), APInt(32, this->getExtend(), false));
                             
     // Make the new basic block for the loop header, inserting after current block.
@@ -613,21 +612,21 @@ Value* FARC_StructDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Val
     Builder.SetInsertPoint(LoopBB);
                             
     // Start the PHI node with an entry for Start.
-    PHINode* Variable = Builder.CreatePHI(Type::getInt32Ty(getGlobalContext()), 2, "i");
+    PHINode* Variable = Builder.CreatePHI(INT32, 2, "i");
     Variable->addIncoming(CounterValue, PreheaderBB);
                             
     // Emit the body of the loop:
 
     //outbuf = outbuf_old + incount_i * extend
     Value* incnt_i_mul_ext_32 = Builder.CreateMul(Variable, extend);
-    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, Type::getInt64Ty(getGlobalContext()));
+    Value* incnt_i_mul_ext_64 = Builder.CreateZExt(incnt_i_mul_ext_32, INT64);
     Value* outbuf_new_int = Builder.CreateAdd(outbuf_orig_int, incnt_i_mul_ext_64);
 
     for (int i=0; i<this->Count; i++) {
         // outbuf_displ = inptr_new + displ[i]
         Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
         Value* outbuf_displ_int = Builder.CreateAdd(outbuf_new_int, displ_i);
-        Value* outbuf_displ = Builder.CreateIntToPtr(outbuf_displ_int, Type::getInt8PtrTy(getGlobalContext()));
+        Value* outbuf_displ = Builder.CreateIntToPtr(outbuf_displ_int, INT8PTR);
         Builder.CreateStore(outbuf_displ, outbuf_ptr);
         this->Types[i]->Codegen_Unpack(inbuf_ptr, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), outbuf_ptr);
     }
@@ -652,7 +651,7 @@ Value* FARC_StructDatatype::Codegen_Unpack(Value* inbuf_ptr, Value* incount, Val
     // Add a new entry to the PHI node for the backedge.
     Variable->addIncoming(NextVar, LoopEndBB);
 
-    return Constant::getNullValue(Type::getInt32Ty(getGlobalContext()));
+    return Constant::getNullValue(INT32);
 
 }
 
@@ -678,9 +677,9 @@ void generate_pack_function(FARC_Datatype* ddt) {
 
     // generate code for the datatype
     Value* RetVal = ddt->Codegen_Pack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
-    Builder.CreateRet(RetVal);
+    Builder.CreateRetVoid();
 
-#if LLVM_OUTPUT
+#if LLVM_VERIFY
     verifyFunction(*F);
 #endif
 #if LLVM_OPTIMIZE
@@ -690,18 +689,18 @@ void generate_pack_function(FARC_Datatype* ddt) {
     F->dump();
 
     std::vector<Type *> arg_type;
-    arg_type.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    arg_type.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    arg_type.push_back(Type::getInt64Ty(getGlobalContext()));
+    arg_type.push_back(INT8PTR);
+    arg_type.push_back(INT8PTR);
+    arg_type.push_back(INT64);
     Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
     memcopy->dump();
 
-    std::vector<Type *> prefetch_arg_type;
-    Function *prefetch = Intrinsic::getDeclaration(TheModule, Intrinsic::prefetch, prefetch_arg_type);
-    prefetch->dump();
+//    std::vector<Type *> prefetch_arg_type;
+//    Function *prefetch = Intrinsic::getDeclaration(TheModule, Intrinsic::prefetch, prefetch_arg_type);
+//    prefetch->dump();
 #endif
 
-    ddt->packer = (int (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
+    ddt->packer = (void (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
 
 #if TIME
     HRT_GET_TIMESTAMP(stop);
@@ -715,7 +714,7 @@ void generate_unpack_function(FARC_Datatype* ddt) {
     HRT_GET_TIMESTAMP(start);     
 #endif
 
-    Function* F = Function::Create(FT, Function::ExternalLinkage, "unpacker", TheModule);
+    Function* F = Function::Create(FT, Function::ExternalLinkage, "packer", TheModule);
 
     // Set names for all arguments.
     unsigned Idx = 0;
@@ -730,9 +729,9 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 
     // generate code for the datatype
     Value* RetVal = ddt->Codegen_Unpack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
-    Builder.CreateRet(RetVal);
+    Builder.CreateRetVoid();
 
-#if LLVM_OUTPUT
+#if LLVM_VERIFY
     verifyFunction(*F);
 #endif
 #if LLVM_OPTIMIZE
@@ -742,9 +741,9 @@ void generate_unpack_function(FARC_Datatype* ddt) {
     F->dump();
 
     std::vector<Type *> arg_type;
-    arg_type.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    arg_type.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    arg_type.push_back(Type::getInt64Ty(getGlobalContext()));
+    arg_type.push_back(INT8PTR);
+    arg_type.push_back(INT8PTR);
+    arg_type.push_back(INT64);
     Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
     memcopy->dump();
 
@@ -753,7 +752,7 @@ void generate_unpack_function(FARC_Datatype* ddt) {
     prefetch->dump();
 #endif
 
-    ddt->unpacker = (int (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
+    ddt->unpacker = (void (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
 
 #if TIME
     HRT_GET_TIMESTAMP(stop);
@@ -821,10 +820,10 @@ void FARC_DDT_Init() {
 
     // Initialize some types used by all packers
     std::vector<Type*> FuncArgs;
-    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    FuncArgs.push_back(Type::getInt32Ty(getGlobalContext()));
-    FuncArgs.push_back(Type::getInt8PtrTy(getGlobalContext()));
-    FT = FunctionType::get(Type::getInt32Ty(getGlobalContext()), FuncArgs, false);
+    FuncArgs.push_back(INT8PTR);
+    FuncArgs.push_back(INT32);
+    FuncArgs.push_back(INT8PTR);
+    FT = FunctionType::get(VOID, FuncArgs, false);
 
     Args.push_back("inbuf");
     Args.push_back("count");
