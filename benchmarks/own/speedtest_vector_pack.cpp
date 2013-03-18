@@ -12,8 +12,8 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     char* mpi_outbuf;
     char* farc_inbuf;
     char* farc_outbuf;
-    char* cpp_inbuf;
-    char* cpp_outbuf;
+    double* cpp_inbuf;
+    double* cpp_outbuf;
     int jend, j;
 
     HRT_TIMESTAMP_T start, stop;
@@ -24,8 +24,12 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 
     init_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
-    cpp_inbuf = (char*)malloc(buffer_size);
-    cpp_outbuf = (char*)malloc(buffer_size);
+    cpp_inbuf = (double*)malloc(buffer_size);
+    cpp_outbuf = (double*)malloc(buffer_size);
+    for (size_t i=0; i<buffer_size; i++) {
+        ((char*)cpp_inbuf)[i] = i+1;
+        ((char*)cpp_outbuf)[i] = 0;
+    }
 
     FARC_DDT_Init();
 
