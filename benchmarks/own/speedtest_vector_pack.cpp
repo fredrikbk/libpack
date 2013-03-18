@@ -46,11 +46,6 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 
         for (int i=0; i<inner_runs; i++) {
             HRT_GET_TIMESTAMP(start);
-            FARC_DDT_Pack(farc_inbuf, farc_outbuf, t2, outer_cnt);
-            HRT_GET_TIMESTAMP(stop);
-            HRT_GET_ELAPSED_TICKS(start, stop, &farc_pack);
-
-            HRT_GET_TIMESTAMP(start);
             int position = 0;
             MPI_Pack(mpi_inbuf, outer_cnt, newtype, mpi_outbuf, buffer_size*sizeof(int), &position, MPI_COMM_WORLD);
             HRT_GET_TIMESTAMP(stop);
@@ -66,6 +61,11 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
             }
             HRT_GET_TIMESTAMP(stop);
             HRT_GET_ELAPSED_TICKS(start, stop, &cpp_pack);
+
+            HRT_GET_TIMESTAMP(start);
+            FARC_DDT_Pack(farc_inbuf, farc_outbuf, t2, outer_cnt);
+            HRT_GET_TIMESTAMP(stop);
+            HRT_GET_ELAPSED_TICKS(start, stop, &farc_pack);
 
             static int firstline=1;
             if (firstline) printf("%10s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n", "size", "mpi_create", "farc_create", "cpp_pack", "mpi_pack", "farc_pack", "blklen", "stride", "count", "pack_count");
