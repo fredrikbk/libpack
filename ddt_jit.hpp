@@ -12,8 +12,8 @@
 #include <llvm/IR/Value.h>
 #endif
 
-#define LAZY 1
-#define TIME 0
+#define LAZY 0 
+#define TIME 0 
 
 /* Base class for all datatypes */
 class FARC_Datatype {

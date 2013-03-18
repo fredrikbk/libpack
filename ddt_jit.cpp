@@ -24,7 +24,7 @@
 #include "llvm/ExecutionEngine/JIT.h"
 
 
-#define LLVM_OUTPUT    0 
+#define LLVM_OUTPUT    1 
 #define LLVM_OPTIMIZE  0 
 #define LLVM_VERIFY    LLVM_OUTPUT
 
@@ -177,8 +177,9 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
     nextin2->setName("nextin2");
 
     // check if we are finished with the loop over count
-    Value* EndCond_inner = Builder.CreateICmpEQ(nextout2, nextout1, "innercond");
-                            
+    Value* EndCond_inner = (pack) ? Builder.CreateICmpEQ(nextout2, nextout1, "innercond")
+                                  : Builder.CreateICmpEQ(nextin2, nextin1, "innercond");
+
     // Create and branch to the inner loop postamble
     BasicBlock *LoopEnd_inner_BB = Builder.GetInsertBlock();
     BasicBlock *After_inner_BB = BasicBlock::Create(getGlobalContext(), "afterinner", TheFunction);
@@ -196,7 +197,7 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
         nextin1->setName("nextin1");
     }
     else {
-        nextout1 = Builder.CreateAdd(out2, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
+        nextout1 = Builder.CreateAdd(out1, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
         nextout1->setName("nextout1");
     }
 
@@ -729,7 +730,7 @@ void generate_unpack_function(FARC_Datatype* ddt) {
     HRT_GET_TIMESTAMP(start);     
 #endif
 
-    Function* F = Function::Create(FT, Function::ExternalLinkage, "packer", TheModule);
+    Function* F = Function::Create(FT, Function::ExternalLinkage, "unpacker", TheModule);
     F->setDoesNotThrow();
     F->setDoesNotAlias(1);
     F->setDoesNotAlias(3);
