@@ -24,7 +24,7 @@
 #include "llvm/ExecutionEngine/JIT.h"
 
 
-#define LLVM_OUTPUT    1 
+#define LLVM_OUTPUT    0 
 #define LLVM_OPTIMIZE  0 
 #define LLVM_VERIFY    LLVM_OUTPUT
 
