@@ -18,6 +18,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Intrinsics.h"
 #endif
+
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
@@ -25,9 +26,9 @@
 
 #define LLVM_OUTPUT    0 
 #define LLVM_OPTIMIZE  0 
-#define LLVM_VERIFY    LLVM_OUTPUT 
+#define LLVM_VERIFY    LLVM_OUTPUT
 
-#if LLVM_OUTPUT
+#if LLVM_VERIFY
 #include "llvm/Analysis/Verifier.h"
 #endif
 #if LLVM_OPTIMIZE
@@ -65,6 +66,7 @@ std::vector<std::string> Args;
 FunctionType *FT;
 
 #define VOID     Type::getVoidTy(getGlobalContext())
+#define INT8     Type::getInt8Ty(getGlobalContext())
 #define INT32    Type::getInt32Ty(getGlobalContext())
 #define INT64    Type::getInt64Ty(getGlobalContext())
 #define INT8PTR  Type::getInt8PtrTy(getGlobalContext())
@@ -240,13 +242,23 @@ int FARC_PrimitiveDatatype::getSize() {
 
 Value* FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
                             
-    /** for debugging */ 
-    //Value *fmt_ptr1 = Builder.CreateGlobalStringPtr("in PTR: %p out PTR: %p size: %i\n\n\0");
-    // now we can print as follows:
-    //CallInst *call = Builder.CreateCall3(func, fmt_ptr1, inbuf, outbuf);
 
-    Value* contig_extend = multNode(this->Extend, incount);
-    Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
+    if (llvm::ConstantInt* incount_ci = dyn_cast<llvm::ConstantInt>(incount)) {
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
+        
+        // Bitcast instructions that make it easier to interface with the outside code.
+        // Note that these don't result in any assembly instructions
+        Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
+        Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
+
+        // Load and store
+        Value* bytes = Builder.CreateAlignedLoad(in_vec, 1, "bytes");
+        Builder.CreateAlignedStore(bytes, out_vec, 1);
+    }
+    else {
+        Value* contig_extend = multNode(this->getSize(), incount);
+        Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
+    }
 
     // return 0 for now
     return Constant::getNullValue(INT32);
@@ -663,9 +675,12 @@ void generate_pack_function(FARC_Datatype* ddt) {
 #endif
 
     Function* F = Function::Create(FT, Function::ExternalLinkage, "packer", TheModule);
+    F->setDoesNotThrow();
+    F->setDoesNotAlias(1);
+    F->setDoesNotAlias(3);
+
     // Set names for all arguments.
     unsigned Idx = 0;
-
     for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size(); ++AI, ++Idx) {
         AI->setName(Args[Idx]);
         NamedValues[Args[Idx]] = AI;
@@ -715,6 +730,9 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 #endif
 
     Function* F = Function::Create(FT, Function::ExternalLinkage, "packer", TheModule);
+    F->setDoesNotThrow();
+    F->setDoesNotAlias(1);
+    F->setDoesNotAlias(3);
 
     // Set names for all arguments.
     unsigned Idx = 0;
@@ -747,9 +765,9 @@ void generate_unpack_function(FARC_Datatype* ddt) {
     Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
     memcopy->dump();
 
-    std::vector<Type *> prefetch_arg_type;
-    Function *prefetch = Intrinsic::getDeclaration(TheModule, Intrinsic::prefetch, prefetch_arg_type);
-    prefetch->dump();
+//    std::vector<Type *> prefetch_arg_type;
+//    Function *prefetch = Intrinsic::getDeclaration(TheModule, Intrinsic::prefetch, prefetch_arg_type);
+//    prefetch->dump();
 #endif
 
     ddt->unpacker = (void (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
