@@ -4,7 +4,12 @@
 #include <vector>
 #include <mpi.h>
 
+#if ((__clang_major__ == 3) && (__clang_minor__ == 2))
 #define LLVM32 1
+#warn foo
+#else
+#define LLVM32 0
+#endif
 
 #if LLVM32
 #include <llvm/Value.h>
