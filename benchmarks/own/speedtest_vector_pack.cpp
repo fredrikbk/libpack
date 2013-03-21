@@ -6,10 +6,34 @@
 
 unsigned long long g_timerfreq;
 
+void init_in_and_out_buffer(size_t buffer_size, char** inbuf, char** outbuf) {
+
+	*inbuf = (char*) malloc(buffer_size);
+    *outbuf = (char*) malloc(buffer_size);
+
+	assert(inbuf != NULL);
+	assert(outbuf != NULL);
+
+    for (size_t i=0; i<buffer_size; i++) {
+        ((char*) *inbuf)[i] = i+1;
+        ((char*) *outbuf)[i] = 0;
+    }
+	
+}
+
+void free_in_and_out_buffer(size_t buffer_size, char** inbuf, char** outbuf) {
+
+	free(*inbuf);
+	free(*outbuf);
+	
+}
+
 void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int inner_runs, int outer_runs) {
 
     char* mpi_inbuf;
     char* mpi_outbuf;
+    char* pmpi_inbuf;
+    char* pmpi_outbuf;
     char* farc_inbuf;
     char* farc_outbuf;
     double* cpp_inbuf;
@@ -17,21 +41,15 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     int jend, j;
 
     HRT_TIMESTAMP_T start, stop;
-    uint64_t mpi_type_create, farc_type_create, mpi_pack, farc_pack, cpp_pack;
+    uint64_t mpi_type_create, pmpi_type_create, farc_type_create, mpi_pack, pmpi_pack, farc_pack, cpp_pack;
 
     int data_size = sizeof(double)*inner_cnt * outer_cnt * blklen;
     int buffer_size = sizeof(double)*((inner_cnt-1)*stride+blklen) * outer_cnt;
 
-    init_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
-
-    cpp_inbuf = (double*)malloc(buffer_size);
-    cpp_outbuf = (double*)malloc(buffer_size);
-    for (size_t i=0; i<buffer_size; i++) {
-        ((char*)cpp_inbuf)[i] = i+1;
-        ((char*)cpp_outbuf)[i] = 0;
-    }
-
-    FARC_DDT_Init();
+	init_in_and_out_buffer(buffer_size, &mpi_inbuf, &mpi_outbuf);
+	init_in_and_out_buffer(buffer_size, &pmpi_inbuf, &pmpi_outbuf);
+	init_in_and_out_buffer(buffer_size, &farc_inbuf, &farc_outbuf);
+	init_in_and_out_buffer(buffer_size, reinterpret_cast<char**>(&cpp_inbuf),  reinterpret_cast<char**>(&cpp_outbuf));
 
     for (int o=0; o<outer_runs; o++) {
         HRT_GET_TIMESTAMP(start);
@@ -40,21 +58,36 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
         FARC_DDT_Commit(t2);
         HRT_GET_TIMESTAMP(stop);
         HRT_GET_ELAPSED_TICKS(start, stop, &farc_type_create);
-	
+
         HRT_GET_TIMESTAMP(start);
-        MPI_Datatype newtype;
-        MPI_Type_vector(inner_cnt, blklen, stride, MPI_DOUBLE, &newtype);
-        MPI_Type_commit(&newtype);
+        MPI_Datatype newtype_mpi;
+        MPI_Type_vector(inner_cnt, blklen, stride, MPI_DOUBLE, &newtype_mpi);
+        MPI_Type_commit(&newtype_mpi);
         HRT_GET_TIMESTAMP(stop);
         HRT_GET_ELAPSED_TICKS(start, stop, &mpi_type_create);
 
+        HRT_GET_TIMESTAMP(start);
+        MPI_Datatype newtype_pmpi;
+        PMPI_Type_vector(inner_cnt, blklen, stride, MPI_DOUBLE, &newtype_pmpi);
+        PMPI_Type_commit(&newtype_pmpi);
+        HRT_GET_TIMESTAMP(stop);
+        HRT_GET_ELAPSED_TICKS(start, stop, &pmpi_type_create);
+
         for (int i=0; i<inner_runs; i++) {
-            HRT_GET_TIMESTAMP(start);
+
             int position = 0;
-            MPI_Pack(mpi_inbuf, outer_cnt, newtype, mpi_outbuf, buffer_size*sizeof(int), &position, MPI_COMM_WORLD);
+            HRT_GET_TIMESTAMP(start);
+            MPI_Pack(mpi_inbuf, outer_cnt, newtype_mpi, mpi_outbuf, buffer_size*sizeof(int), &position, MPI_COMM_WORLD);
             HRT_GET_TIMESTAMP(stop);
             HRT_GET_ELAPSED_TICKS(start, stop, &mpi_pack);
-	      
+
+
+            position = 0;
+            HRT_GET_TIMESTAMP(start);
+            PMPI_Pack(pmpi_inbuf, outer_cnt, newtype_pmpi, mpi_outbuf, buffer_size*sizeof(int), &position, MPI_COMM_WORLD);
+            HRT_GET_TIMESTAMP(stop);
+            HRT_GET_ELAPSED_TICKS(start, stop, &pmpi_pack);
+	
             HRT_GET_TIMESTAMP(start);
             for(j=0; j < inner_cnt; ++j) {
                 cpp_outbuf[j*5    ] = cpp_inbuf[j*stride*5];
@@ -72,13 +105,14 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
             HRT_GET_ELAPSED_TICKS(start, stop, &farc_pack);
 
             static int firstline=1;
-            if (firstline) printf("%10s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n", "size", "mpi_create", "farc_create", "cpp_pack", "mpi_pack", "farc_pack", "blklen", "stride", "count", "pack_count");
+            if (firstline) printf("%10s %10s %10s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n", "size", "mpi_create", "pmpi_create", "farc_create", "cpp_pack", "mpi_pack", "pmpi_pack", "farc_pack", "blklen", "stride", "count", "pack_count");
             firstline=0;
-            printf("%10i %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10i %10i %10i %10i\n", data_size, HRT_GET_USEC(mpi_type_create), HRT_GET_USEC(farc_type_create), HRT_GET_USEC(cpp_pack), HRT_GET_USEC(mpi_pack), HRT_GET_USEC(farc_pack), blklen, stride, inner_cnt, outer_cnt);
+            printf("%10i %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10i %10i %10i %10i\n", data_size, HRT_GET_USEC(mpi_type_create), HRT_GET_USEC(pmpi_type_create), HRT_GET_USEC(farc_type_create), HRT_GET_USEC(cpp_pack), HRT_GET_USEC(mpi_pack), HRT_GET_USEC(pmpi_pack), HRT_GET_USEC(farc_pack), blklen, stride, inner_cnt, outer_cnt);
 
         } 
 
-        MPI_Type_free(&newtype);
+        MPI_Type_free(&newtype_mpi);
+        MPI_Type_free(&newtype_pmpi);
         FARC_DDT_Free(t1);
         FARC_DDT_Free(t2);
 
@@ -87,7 +121,10 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 //    int res = compare_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 //    test_result(res);
 
-    free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+	free_in_and_out_buffer(buffer_size, &mpi_inbuf, &mpi_outbuf);
+	free_in_and_out_buffer(buffer_size, &pmpi_inbuf, &pmpi_outbuf);
+	free_in_and_out_buffer(buffer_size, &farc_inbuf, &farc_outbuf);
+	free_in_and_out_buffer(buffer_size, reinterpret_cast<char**>(&cpp_inbuf), reinterpret_cast<char**>(&cpp_outbuf));
 
 }
 
@@ -100,6 +137,7 @@ int main(int argc, char** argv) {
 
     MPI_Init(&argc, &argv);
     HRT_INIT(1, g_timerfreq);
+    FARC_DDT_Init();
  
     int num_runs =  atoi(argv[1]);
     srand(time(NULL));
@@ -129,7 +167,6 @@ int main(int argc, char** argv) {
             }
         }
     }
-
 
     MPI_Finalize();
 

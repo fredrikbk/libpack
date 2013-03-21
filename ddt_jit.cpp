@@ -347,7 +347,6 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
 
 }
 
-
 /* FARC_PrimitiveDatatype */
 FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(MPI_Datatype type) : FARC_Datatype() {
 
@@ -813,6 +812,7 @@ void generate_pack_function(FARC_Datatype* ddt) {
     // Set names for all arguments.
     unsigned Idx = 0;
     for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size(); ++AI, ++Idx) {
+		assert(AI !=  F->arg_end());
         AI->setName(Args[Idx]);
         NamedValues[Args[Idx]] = AI;
     }
@@ -847,6 +847,7 @@ void generate_pack_function(FARC_Datatype* ddt) {
 #endif
 
     ddt->packer = (void (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
+	ddt->FPack = F;
 
 #if TIME
     HRT_GET_TIMESTAMP(stop);
@@ -902,6 +903,7 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 #endif
 
     ddt->unpacker = (void (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
+	ddt->FUnpack = F;
 
 #if TIME
     HRT_GET_TIMESTAMP(stop);
@@ -944,6 +946,14 @@ void FARC_DDT_Unpack(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count) {
 
 void FARC_DDT_Free(FARC_Datatype* ddt) {
 
+	if (ddt->packer != NULL) {
+		TheExecutionEngine->freeMachineCodeForFunction(ddt->FPack);
+		ddt->FPack->eraseFromParent();
+	}
+	if (ddt->unpacker != NULL) {
+		TheExecutionEngine->freeMachineCodeForFunction(ddt->FUnpack);
+		ddt->FUnpack->eraseFromParent();
+	}
     delete ddt;
     
 }

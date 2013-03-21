@@ -34,6 +34,8 @@ class FARC_Datatype {
     void (*packer)(void*, int, void*);
     void (*unpacker)(void*, int, void*);
 
+	llvm::Function* FPack;
+	llvm::Function* FUnpack;
 };
 
 /* Class for primitive types, such as MPI_INT, MPI_BYTE, etc */
