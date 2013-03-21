@@ -89,12 +89,14 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
             HRT_GET_ELAPSED_TICKS(start, stop, &pmpi_pack);
 	
             HRT_GET_TIMESTAMP(start);
-            for(j=0; j < inner_cnt; ++j) {
-                cpp_outbuf[j*5    ] = cpp_inbuf[j*stride*5];
-                cpp_outbuf[j*5 + 1] = cpp_inbuf[j*stride*5 + 1];
-                cpp_outbuf[j*5 + 2] = cpp_inbuf[j*stride*5 + 2];
-                cpp_outbuf[j*5 + 3] = cpp_inbuf[j*stride*5 + 3];
-                cpp_outbuf[j*5 + 4] = cpp_inbuf[j*stride*5 + 4];
+            for (int i=0; i < outer_cnt; i++) {
+                for(int j=0; j < inner_cnt; j++) {
+                    cpp_outbuf[i*inner_cnt*5 + j*5    ] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5];
+                    cpp_outbuf[i*inner_cnt*5 + j*5 + 1] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5 + 1];
+                    cpp_outbuf[i*inner_cnt*5 + j*5 + 2] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5 + 2];
+                    cpp_outbuf[i*inner_cnt*5 + j*5 + 3] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5 + 3];
+                    cpp_outbuf[i*inner_cnt*5 + j*5 + 4] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5 + 4];
+                }
             }
             HRT_GET_TIMESTAMP(stop);
             HRT_GET_ELAPSED_TICKS(start, stop, &cpp_pack);
