@@ -6,10 +6,10 @@ entry:
   br label %outerloop
 
 outerloop:                                        ; preds = %afterinner, %entry
-  %out1 = phi i64 [ %out, %entry ], [ %0, %afterinner ]
+  %out1 = phi i64 [ %out, %entry ], [ %nextout1, %afterinner ]
   %in1 = phi i64 [ %in, %entry ], [ %nextin1, %afterinner ]
   %i = phi i32 [ 0, %entry ], [ %nexti, %afterinner ]
-  %0 = add i64 %out1, 1280
+  %nextout1 = add i64 %out1, 1280
   br label %innerloop
 
 innerloop:                                        ; preds = %innerloop, %outerloop
@@ -21,7 +21,7 @@ innerloop:                                        ; preds = %innerloop, %outerlo
   store <40 x i8> %bytes, <40 x i8>* %out2_addr, align 1
   %nextout2 = add i64 %out2, 40
   %nextin2 = add i64 %in2, 1440
-  %innercond = icmp eq i64 %nextout2, %0
+  %innercond = icmp eq i64 %nextout2, %nextout1
   br i1 %innercond, label %afterinner, label %innerloop
 
 afterinner:                                       ; preds = %innerloop
