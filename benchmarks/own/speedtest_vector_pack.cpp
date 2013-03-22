@@ -4,6 +4,7 @@
 #include "../../tests/test.hpp"
 #include "../../copy_benchmark/hrtimer/hrtimer.h"
 
+
 unsigned long long g_timerfreq;
 
 void init_in_and_out_buffer(size_t buffer_size, char** inbuf, char** outbuf) {
@@ -74,20 +75,18 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
         HRT_GET_ELAPSED_TICKS(start, stop, &pmpi_type_create);
 
         for (int i=0; i<inner_runs; i++) {
-
             int position = 0;
             HRT_GET_TIMESTAMP(start);
             MPI_Pack(mpi_inbuf, outer_cnt, newtype_mpi, mpi_outbuf, buffer_size*sizeof(int), &position, MPI_COMM_WORLD);
             HRT_GET_TIMESTAMP(stop);
             HRT_GET_ELAPSED_TICKS(start, stop, &mpi_pack);
 
-
             position = 0;
             HRT_GET_TIMESTAMP(start);
             PMPI_Pack(pmpi_inbuf, outer_cnt, newtype_pmpi, mpi_outbuf, buffer_size*sizeof(int), &position, MPI_COMM_WORLD);
             HRT_GET_TIMESTAMP(stop);
             HRT_GET_ELAPSED_TICKS(start, stop, &pmpi_pack);
-	
+
             HRT_GET_TIMESTAMP(start);
             for (int i=0; i < outer_cnt; i++) {
                 for(int j=0; j < inner_cnt; j++) {
@@ -112,7 +111,6 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
             printf("%10i %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10.3lf %10i %10i %10i %10i\n", data_size, HRT_GET_USEC(mpi_type_create), HRT_GET_USEC(pmpi_type_create), HRT_GET_USEC(farc_type_create), HRT_GET_USEC(cpp_pack), HRT_GET_USEC(mpi_pack), HRT_GET_USEC(pmpi_pack), HRT_GET_USEC(farc_pack), blklen, stride, inner_cnt, outer_cnt);
 
         } 
-
         MPI_Type_free(&newtype_mpi);
         MPI_Type_free(&newtype_pmpi);
         FARC_DDT_Free(t1);
@@ -136,7 +134,6 @@ int main(int argc, char** argv) {
         fprintf(stderr, "%s [num-runs] [blklen_start] [blklen_end] [blklen_inc] [stride_start] [stride_end] [stride_inc] [inner_cnt_start] [inner_cnt_end] [inner_cnt_inc] [outer_cnt_start] [outer_cnt_end] [outer_cnt_inc]\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-
     MPI_Init(&argc, &argv);
     HRT_INIT(1, g_timerfreq);
     FARC_DDT_Init();
@@ -171,7 +168,6 @@ int main(int argc, char** argv) {
     }
 
     MPI_Finalize();
-
     return 0;
 
 }

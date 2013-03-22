@@ -63,10 +63,10 @@ class FARC_ContiguousDatatype : public FARC_Datatype {
 
     public:
     FARC_ContiguousDatatype(FARC_Datatype* type, int count) : FARC_Datatype(), Basetype(type), Count(count) {}
-    int getExtend();
-    int getSize();
     llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    int getExtend();
+    int getSize();
 
 };
 
@@ -122,6 +122,24 @@ class FARC_HIndexedDatatype : public FARC_Datatype {
 
 };
 
+/* Class for indexed block types */
+class FARC_IndexedBlockDatatype : public FARC_Datatype {
+
+    int Count;
+    FARC_Datatype* Basetype;
+    int Blocklen;
+    std::vector<int> Displ;
+    void Codegen(llvm::Value *contig_buf, llvm::Value *hindexed_buf, llvm::Value* incount, bool gather);
+
+    public:
+    FARC_IndexedBlockDatatype(int count, int blocklen, int* displ, FARC_Datatype* basetype);
+    llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    int getExtend();
+    int getSize();
+
+};
+
 /* Class for struct types */
 class FARC_StructDatatype : public FARC_Datatype {
 
@@ -132,8 +150,9 @@ class FARC_StructDatatype : public FARC_Datatype {
 
     public:
     FARC_StructDatatype(int count, int* blocklen, long*  displ, FARC_Datatype** types);
-    llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    llvm::Value* Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    llvm::Value* Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen(llvm::Value *compactbuf, llvm::Value *scatteredbuf, llvm::Value* incount, bool pack);
     int getExtend();
     int getSize();
 
@@ -150,6 +169,10 @@ void FARC_DDT_Free(FARC_Datatype* ddt);
 
 void FARC_DDT_Pack(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count);
 void FARC_DDT_Unpack(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count);
+
+void FARC_DDT_Pack_partial(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count, int segnum);
+void FARC_DDT_Unpack_partial(void* inbuf, void* outbuf, FARC_Datatype* ddt, int count, int segnum);
+
 
 #endif
 
