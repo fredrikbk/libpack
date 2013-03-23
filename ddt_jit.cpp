@@ -76,21 +76,21 @@ FunctionType *FT;
 
 
 /* Codegen Functions */
-Value* multNode(int op1, Value* op2PtrNode) {
+static Value* multNode(int op1, Value* op2PtrNode) {
     Value* op1Node = ConstantInt::get(getGlobalContext(), APInt(64, op1, false));
     Value* op2Node = Builder.CreateIntCast(op2PtrNode, INT64, false); 
     return Builder.CreateMul(op1Node, op2Node);
 }
 
-Value* constNode(int val) {
+static inline Value* constNode(int val) {
     return ConstantInt::get(getGlobalContext(), APInt(32, val, false));
 }
 
-Value* constNode(long val) {
+static inline Value* constNode(long val) {
     return ConstantInt::get(getGlobalContext(), APInt(64, val, false));
 }
 
-void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* basetype, int count, int blocklen, int elemstride_in, int elemstride_out, bool pack) {
+static void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* basetype, int count, int blocklen, int elemstride_in, int elemstride_out, bool pack) {
 
         /** for debugging **   
     std::vector<llvm::Type*> printf_arg_types;
@@ -350,6 +350,12 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
 
 }
 
+void printindent(int indent) {
+    for(int i=0; i<indent; i++) {
+        printf("  ");
+    }
+}
+
 /* FARC_PrimitiveDatatype */
 FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::PrimitiveType type) : FARC_Datatype() {
 
@@ -359,18 +365,10 @@ FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::Primitive
     if (Type == CHAR)   this->Extend = 1;
     if (Type == DOUBLE) this->Extend = sizeof(double);
     if (Type == INT)    this->Extend = sizeof(int);
-    //TODO add more
+    //TODO add more. Remember to also add them to the print function.
 
     this->Size = this->Extend;
 
-}
-
-int FARC_PrimitiveDatatype::getExtend() {
-    return this->Extend;
-}
-
-int FARC_PrimitiveDatatype::getSize() {
-    return this->Size;
 }
 
 void FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
@@ -396,10 +394,38 @@ void FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* o
 }
 
 void FARC_PrimitiveDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
-
     // does exactly the same as pack for primitive types
     return this->Codegen_Pack(inbuf, incount, outbuf);
+}
 
+int FARC_PrimitiveDatatype::getExtend() {
+    return this->Extend;
+}
+
+int FARC_PrimitiveDatatype::getSize() {
+    return this->Size;
+}
+
+void FARC_PrimitiveDatatype::print(int indent) {
+    printindent(indent);
+    switch (this->Type) {
+    case BYTE:
+        printf("byte");
+        break;
+    case CHAR:
+        printf("char");
+        break;
+    case DOUBLE:
+        printf("double");
+        break;
+    case INT:
+        printf("int");
+        break;
+    default:
+        printf("N/A");
+        break;
+    }
+    printf("\n");
 }
 
 /* Value* FARC_PrimitiveDatatype::Codegen_Pack_partial(Value* inbuf, Value* incount, Value* outbuf, Value* outbuf_from, Value* outbuf_to) {
@@ -445,14 +471,6 @@ void FARC_PrimitiveDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value*
 
 
 /* Class FARC_ContiguousDatatype */
-int FARC_ContiguousDatatype::getExtend() {
-    return this->Count * this->Basetype->getExtend();
-}
-
-int FARC_ContiguousDatatype::getSize() {
-    return this->Count * this->Basetype->getSize();
-}
-
 void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out, bool pack) {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
@@ -512,16 +530,22 @@ void FARC_ContiguousDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value
     Codegen(inbuf, incount, outbuf, this->Basetype->getSize(), this->Basetype->getExtend(), false);
 }
 
+int FARC_ContiguousDatatype::getExtend() {
+    return this->Count * this->Basetype->getExtend();
+}
+
+int FARC_ContiguousDatatype::getSize() {
+    return this->Count * this->Basetype->getSize();
+}
+
+void FARC_ContiguousDatatype::print(int indent) {
+    printindent(indent);
+    printf("contiguous(count=%d)\n", this->Count);
+    Basetype->print(indent+1);
+}
+
 
 /* Class FARC_VectorDatatype */
-int FARC_VectorDatatype::getExtend() {
-    return (this->Count - 1) * this->Basetype->getExtend() * this->Stride + this->Blocklen * this->Basetype->getExtend();
-}
-
-int FARC_VectorDatatype::getSize() {
-    return this->Count * this->Blocklen*this->Basetype->getSize();
-}
-
 void FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count,
             this->Blocklen, this->Basetype->getExtend() * this->Stride, this->Basetype->getSize() * this->Blocklen, true);
@@ -532,20 +556,22 @@ void FARC_VectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* ou
             this->Basetype->getSize() * this->Blocklen, this->Basetype->getExtend() * this->Stride, false);
 }
 
+int FARC_VectorDatatype::getExtend() {
+    return (this->Count - 1) * this->Basetype->getExtend() * this->Stride + this->Blocklen * this->Basetype->getExtend();
+}
+
+int FARC_VectorDatatype::getSize() {
+    return this->Count * this->Blocklen*this->Basetype->getSize();
+}
+
+void FARC_VectorDatatype::print(int indent) {
+    printindent(indent);
+    printf("vector(count=%d, blocklen=%d, stride=%d)\n", this->Count, this->Blocklen, this->Stride);
+    Basetype->print(indent+1);
+}
+
 
 /* Class FARC_HVectorDatatype */
-int FARC_HVectorDatatype::getExtend() {
-
-    return (this->Count-1)*this->Stride + this->Blocklen*this->Basetype->getExtend();
-
-}
-
-int FARC_HVectorDatatype::getSize() {
-
-    return this->Count * this->Blocklen*this->Basetype->getSize();
-
-}
-
 void FARC_HVectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Stride, this->Basetype->getSize() * this->Blocklen, true);
@@ -556,29 +582,111 @@ void FARC_HVectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* o
             this->Basetype->getSize() * this->Blocklen, this->Stride, false);
 }
 
+int FARC_HVectorDatatype::getExtend() {
+    return (this->Count-1)*this->Stride + this->Blocklen*this->Basetype->getExtend();
+}
 
-/* Class FARC_HIndexedDatatype */
-FARC_HIndexedDatatype::FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype) : FARC_Datatype() {
+int FARC_HVectorDatatype::getSize() {
+    return this->Count * this->Blocklen*this->Basetype->getSize();
+}
+
+void FARC_HVectorDatatype::print(int indent) {
+    printindent(indent);
+    printf("hvector(count=%d, blocklen=%d, stride=%d)\n", this->Count, this->Blocklen, this->Stride);
+    Basetype->print(indent+1);
+}
+
+
+/* Class FARC_IndexedBlockDatatype */
+FARC_IndexedBlockDatatype::FARC_IndexedBlockDatatype(int count, int blocklen, int* displ, FARC_Datatype* basetype) : FARC_Datatype() {
 
     this->Count = count;
     this->Basetype = basetype;
-    for (int i=0; i<count; i++) this->Blocklen.push_back(blocklen[i]);
+    this->Blocklen = blocklen;
     for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
 
 }
 
-int FARC_HIndexedDatatype::getExtend() {
+void FARC_IndexedBlockDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* incount, bool pack) {
+
+    Function* TheFunction = Builder.GetInsertBlock()->getParent();
+
+    // Base address of the input buffer
+    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, INT64);
+    Value* extend = constNode((long)this->getExtend());
+    Value* incount_64 = Builder.CreateZExt(incount, INT64);
+    Value* incount_expanded = Builder.CreateMul(incount_64, extend);
+
+    // Loop
+    BasicBlock* PreheaderBB = Builder.GetInsertBlock();
+    BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
+    Builder.CreateBr(LoopBB);
+    Builder.SetInsertPoint(LoopBB);
+
+    PHINode *compact = Builder.CreatePHI(INT8PTR, 2, "compact");
+    compact->addIncoming(compactbuf, PreheaderBB);
+    PHINode* i = Builder.CreatePHI(INT64, 2, "i");
+    i->addIncoming(constNode(0l), PreheaderBB);
+
+    Value* compact_addr = Builder.CreatePtrToInt(compact, INT64);
+
+    // OPT: Make this the loop counter
+    Value* scattered_disp_base = Builder.CreateAdd(scatteredbuf_orig_int, i);
+
+    Value* nextcompact = compact;
+    Value* compact_bytes_to_stride = constNode((long) Basetype->getSize() * Blocklen);
+
+    for (int i=0; i<this->Count; i++) {
+        // Set the scattered ptr to scattered_disp_base + this->Disl[i] * Basetype->size
+        Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i] * Basetype->getSize(), false));
+        Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
+        Value* scattered = Builder.CreateIntToPtr(scattered_disp, INT8PTR);
+
+        if (pack) Basetype->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, Blocklen, false)), nextcompact);
+        else      Basetype->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, Blocklen, false)), scattered);
+
+        // Increment the compact ptr by Size(Basetype) * Blocklen
+        compact_addr = Builder.CreateAdd(compact_addr, compact_bytes_to_stride);
+        nextcompact = Builder.CreateIntToPtr(compact_addr, INT8PTR);
+    }
+
+    // Increment the loop index and test for loop exit
+    Value* nexti = Builder.CreateAdd(i, extend, "nexti");
+    Value* EndCond = Builder.CreateICmpEQ(nexti, incount_expanded, "loopcond");
+
+    // Create and branch to the outer loop postamble
+    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
+    BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
+
+    Builder.CreateCondBr(EndCond, AfterBB, LoopBB);
+    Builder.SetInsertPoint(AfterBB);
+                            
+    // Add backedges for the loop induction variable
+    compact->addIncoming(nextcompact, LoopEndBB);
+    i->addIncoming(nexti, LoopEndBB);
+
+}
+
+void FARC_IndexedBlockDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+    Codegen(outbuf, inbuf, incount, true);
+}
+
+void FARC_IndexedBlockDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+    Codegen(inbuf, outbuf, incount, false);
+}
+
+int FARC_IndexedBlockDatatype::getExtend() {
 
     if (this->Count == 0) return 0;
 
     int bext = this->Basetype->getExtend();
 
-    int ub = this->Displ[0] + bext * this->Blocklen[0];
-    int lb = this->Displ[0];
+    int ub = this->Displ[0] * bext + this->Blocklen * bext;
+    int lb = this->Displ[0] * bext;
 
     for (int i=0; i<this->Count; i++) {
-        int tmp_ub = this->Displ[i] + bext * this->Blocklen[i];
-        int tmp_lb = this->Displ[i];
+        int tmp_ub = this->Displ[i] * bext + this->Blocklen * bext;
+        int tmp_lb = this->Displ[i] * bext;
         if (tmp_ub > ub) ub = tmp_ub;
         if (tmp_lb < lb) lb = tmp_lb;
     }
@@ -587,15 +695,36 @@ int FARC_HIndexedDatatype::getExtend() {
 
 }
 
-int FARC_HIndexedDatatype::getSize() {
+int FARC_IndexedBlockDatatype::getSize() {
 
     int sum = 0;
     int bsize = this->Basetype->getSize();
     for (int i=0; i<this->Count; i++) {
-        sum += bsize * this->Blocklen[i];
+        sum += bsize * this->Blocklen;
     }
 
     return sum;
+
+}
+
+void FARC_IndexedBlockDatatype::print(int indent) {
+    printindent(indent);
+    printf("hindexed(count=%d, blocklen=%d)\n", this->Count, this->Blocklen);
+    for (int i=0; i<Displ.size(); i++) {
+        printindent(indent+1);
+        printf("(displ=%d)\n", Displ[i]);
+    }
+    Basetype->print(indent+2);
+}
+
+
+/* Class FARC_HIndexedDatatype */
+FARC_HIndexedDatatype::FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype) : FARC_Datatype() {
+
+    this->Count = count;
+    this->Basetype = basetype;
+    for (int i=0; i<count; i++) this->Blocklen.push_back(blocklen[i]);
+    for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
 
 }
 
@@ -664,29 +793,18 @@ void FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* 
     Codegen(inbuf, outbuf, incount, false);
 }
 
-
-/* Class FARC_IndexedBlockDatatype */
-FARC_IndexedBlockDatatype::FARC_IndexedBlockDatatype(int count, int blocklen, int* displ, FARC_Datatype* basetype) : FARC_Datatype() {
-
-    this->Count = count;
-    this->Basetype = basetype;
-    this->Blocklen = blocklen;
-    for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
-
-}
-
-int FARC_IndexedBlockDatatype::getExtend() {
+int FARC_HIndexedDatatype::getExtend() {
 
     if (this->Count == 0) return 0;
 
     int bext = this->Basetype->getExtend();
 
-    int ub = this->Displ[0] * bext + this->Blocklen * bext;
-    int lb = this->Displ[0] * bext;
+    int ub = this->Displ[0] + bext * this->Blocklen[0];
+    int lb = this->Displ[0];
 
     for (int i=0; i<this->Count; i++) {
-        int tmp_ub = this->Displ[i] * bext + this->Blocklen * bext;
-        int tmp_lb = this->Displ[i] * bext;
+        int tmp_ub = this->Displ[i] + bext * this->Blocklen[i];
+        int tmp_lb = this->Displ[i];
         if (tmp_ub > ub) ub = tmp_ub;
         if (tmp_lb < lb) lb = tmp_lb;
     }
@@ -695,86 +813,26 @@ int FARC_IndexedBlockDatatype::getExtend() {
 
 }
 
-int FARC_IndexedBlockDatatype::getSize() {
+int FARC_HIndexedDatatype::getSize() {
 
     int sum = 0;
     int bsize = this->Basetype->getSize();
     for (int i=0; i<this->Count; i++) {
-        sum += bsize * this->Blocklen;
+        sum += bsize * this->Blocklen[i];
     }
 
     return sum;
 
 }
 
-void FARC_IndexedBlockDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* incount, bool pack) {
-
-    Function* TheFunction = Builder.GetInsertBlock()->getParent();
-
-    // Base address of the input buffer
-    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, INT64);
-    Value* extend = constNode((long)this->getExtend());
-    Value* incount_64 = Builder.CreateZExt(incount, INT64);
-    Value* incount_expanded = Builder.CreateMul(incount_64, extend);
-
-    // Loop
-    BasicBlock* PreheaderBB = Builder.GetInsertBlock();
-    BasicBlock* LoopBB = BasicBlock::Create(getGlobalContext(), "loop", TheFunction);
-    Builder.CreateBr(LoopBB);
-    Builder.SetInsertPoint(LoopBB);
-
-    PHINode *compact = Builder.CreatePHI(INT8PTR, 2, "compact");
-    compact->addIncoming(compactbuf, PreheaderBB);
-    PHINode* i = Builder.CreatePHI(INT64, 2, "i");
-    i->addIncoming(constNode(0l), PreheaderBB);
-
-    Value* compact_addr = Builder.CreatePtrToInt(compact, INT64);
-
-    // OPT: Make this the loop counter
-    Value* scattered_disp_base = Builder.CreateAdd(scatteredbuf_orig_int, i);
-
-    Value* nextcompact = compact;
-    Value* compact_bytes_to_stride = constNode((long) Basetype->getSize() * Blocklen);
-
-    for (int i=0; i<this->Count; i++) {
-        // Set the scattered ptr to scattered_disp_base + this->Disl[i] * Basetype->size
-        Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i] * Basetype->getSize(), false));
-        Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
-        Value* scattered = Builder.CreateIntToPtr(scattered_disp, INT8PTR);
-
-        if (pack) Basetype->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, Blocklen, false)), nextcompact);
-        else      Basetype->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, Blocklen, false)), scattered);
-
-        // Increment the compact ptr by Size(Basetype) * Blocklen
-        compact_addr = Builder.CreateAdd(compact_addr, compact_bytes_to_stride);
-        nextcompact = Builder.CreateIntToPtr(compact_addr, INT8PTR);
+void FARC_HIndexedDatatype::print(int indent) {
+    printindent(indent);
+    printf("hindexed(count=%d)\n", this->Count);
+    for (int i=0; i<Displ.size(); i++) {
+        printindent(indent+1);
+        printf("(displ=%d, blocklen=%d)\n", Displ[i], Blocklen[i]);
     }
-
-    // Increment the loop index and test for loop exit
-    Value* nexti = Builder.CreateAdd(i, extend, "nexti");
-    Value* EndCond = Builder.CreateICmpEQ(nexti, incount_expanded, "loopcond");
-
-    // Create and branch to the outer loop postamble
-    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
-    BasicBlock *AfterBB = BasicBlock::Create(getGlobalContext(), "afterloop", TheFunction);
-
-    Builder.CreateCondBr(EndCond, AfterBB, LoopBB);
-    Builder.SetInsertPoint(AfterBB);
-                            
-    // Add backedges for the loop induction variable
-    compact->addIncoming(nextcompact, LoopEndBB);
-    i->addIncoming(nexti, LoopEndBB);
-
-
-
-}
-
-void FARC_IndexedBlockDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
-    Codegen(outbuf, inbuf, incount, true);
-}
-
-void FARC_IndexedBlockDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
-    Codegen(inbuf, outbuf, incount, false);
+    Basetype->print(indent+2);
 }
 
 
@@ -785,34 +843,6 @@ FARC_StructDatatype::FARC_StructDatatype(int count, int* blocklen, long*  displ,
     for (int i=0; i<count; i++) Blocklen.push_back(blocklen[i]);
     for (int i=0; i<count; i++) Displ.push_back(displ[i]);
     for (int i=0; i<count; i++) Types.push_back(types[i]);
-
-}
-
-int FARC_StructDatatype::getExtend() {
-
-    if (this->Count == 0) return 0;
-
-    int lb = this->Displ[0];
-    int ub = this->Displ[0] + this->Types[0]->getExtend() * this->Blocklen[0];
-    for (int i=0; i<this->Count; i++) {
-        int tmp_ub = this->Displ[i] + this->Types[i]->getExtend() * this->Blocklen[i];
-        int tmp_lb = this->Displ[i];
-        if (tmp_ub > ub) ub = tmp_ub;
-        if (tmp_lb < lb) lb = tmp_lb;
-    }
-
-    return ub-lb;
-
-}
-
-int FARC_StructDatatype::getSize() {
-
-    int sum = 0;
-    for (int i=0; i<this->Count; i++) {
-        sum += this->Types[i]->getSize() * this->Blocklen[i];
-    }
-
-    return sum;
 
 }
 
@@ -881,6 +911,44 @@ void FARC_StructDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outb
 
 void FARC_StructDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, outbuf, incount, false);
+}
+
+int FARC_StructDatatype::getExtend() {
+
+    if (this->Count == 0) return 0;
+
+    int lb = this->Displ[0];
+    int ub = this->Displ[0] + this->Types[0]->getExtend() * this->Blocklen[0];
+    for (int i=0; i<this->Count; i++) {
+        int tmp_ub = this->Displ[i] + this->Types[i]->getExtend() * this->Blocklen[i];
+        int tmp_lb = this->Displ[i];
+        if (tmp_ub > ub) ub = tmp_ub;
+        if (tmp_lb < lb) lb = tmp_lb;
+    }
+
+    return ub-lb;
+
+}
+
+int FARC_StructDatatype::getSize() {
+
+    int sum = 0;
+    for (int i=0; i<this->Count; i++) {
+        sum += this->Types[i]->getSize() * this->Blocklen[i];
+    }
+
+    return sum;
+
+}
+
+void FARC_StructDatatype::print(int indent) {
+    printindent(indent);
+    printf("hindexed(count=%d)\n", this->Count);
+    for (int i=0; i<Displ.size(); i++) {
+        printindent(indent+1);
+        printf("(displ=%d, blocklen=%d)\n", Displ[i], Blocklen[i]);
+        Types[i]->print(indent+2);
+    }
 }
 
 
@@ -999,6 +1067,10 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 }
 
 void FARC_DDT_Commit(FARC_Datatype* ddt) {
+#if DDT_OUTPUT
+    printf("\n");
+    ddt->print(0);
+#endif
 #if !LAZY
     generate_pack_function(ddt);
     generate_unpack_function(ddt);

@@ -7,7 +7,7 @@
 #define LAZY 0 
 #define TIME 0 
 
-#define DDT_OUTPUT     0 
+#define DDT_OUTPUT     1 
 #define LLVM_OUTPUT    0 
 #define LLVM_OPTIMIZE  0 
 
@@ -27,6 +27,7 @@ class FARC_Datatype {
     virtual void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     virtual int getExtend() = 0;
     virtual int getSize() = 0;
+    virtual void print(int indent) = 0;
 
     void (*packer)(void*, int, void*);
     void (*unpacker)(void*, int, void*);
@@ -37,7 +38,6 @@ class FARC_Datatype {
 
 /* Class for primitive types, such as MPI_INT, MPI_BYTE, etc */
 class FARC_PrimitiveDatatype : public FARC_Datatype {
-    // TODO: Add more datatypes
     public:
     enum PrimitiveType { BYTE, CHAR, DOUBLE, INT };   
 
@@ -47,13 +47,12 @@ class FARC_PrimitiveDatatype : public FARC_Datatype {
     int Size;
 
     public:
-
-
     FARC_PrimitiveDatatype(PrimitiveType type);
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
+    void print(int indent);
 
 };
 
@@ -70,6 +69,7 @@ class FARC_ContiguousDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
+    void print(int indent);
 
 };
 
@@ -87,6 +87,7 @@ class FARC_VectorDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
+    void print(int indent);
 
 };
 
@@ -104,24 +105,7 @@ class FARC_HVectorDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
-
-};
-
-/* Class for hindexed types */
-class FARC_HIndexedDatatype : public FARC_Datatype {
-
-    int Count;
-    FARC_Datatype* Basetype;
-    std::vector<int> Blocklen;
-    std::vector<int> Displ;
-    void Codegen(llvm::Value *contig_buf, llvm::Value *hindexed_buf, llvm::Value* incount, bool gather);
-
-    public:
-    FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype);
-    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    int getExtend();
-    int getSize();
+    void print(int indent);
 
 };
 
@@ -140,6 +124,26 @@ class FARC_IndexedBlockDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
+    void print(int indent);
+
+};
+
+/* Class for hindexed types */
+class FARC_HIndexedDatatype : public FARC_Datatype {
+
+    int Count;
+    FARC_Datatype* Basetype;
+    std::vector<int> Blocklen;
+    std::vector<int> Displ;
+    void Codegen(llvm::Value *contig_buf, llvm::Value *hindexed_buf, llvm::Value* incount, bool gather);
+
+    public:
+    FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype);
+    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    int getExtend();
+    int getSize();
+    void print(int indent);
 
 };
 
@@ -158,6 +162,7 @@ class FARC_StructDatatype : public FARC_Datatype {
     void Codegen(llvm::Value *compactbuf, llvm::Value *scatteredbuf, llvm::Value* incount, bool pack);
     int getExtend();
     int getSize();
+    void print(int indent);
 
 };
 
