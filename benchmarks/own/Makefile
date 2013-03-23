@@ -1,4 +1,4 @@
-CXX=/opt/mpich-3.0.1/bin/mpic++
+CXX=mpic++
 
 LDLIBS=$(shell llvm-config --libs all)
 LDFLAGS=$(shell llvm-config --ldflags) #-dynamic
