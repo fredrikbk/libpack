@@ -5,6 +5,9 @@ BINARIES=$(shell ls *.ll | grep -v "old" | sed -e 's/.ll$$//g';)
 
 all: $(BINARIES)
 
+run: all
+	for b in $(BINARIES); do ./$$b; done
+
 %: %.o %_old.o pack.o
 	clang -o $@ $^ 
 

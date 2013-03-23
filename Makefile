@@ -10,7 +10,7 @@ CFLAGS=$(shell llvm-config --cppflags) -O3 -g3
 farc: ddt_jit.o interposer.o interposerf.o interposer_common.o
 
 test: farc
-	make -C tests
+	make run -C tests
 	make -C pmpi-tests
 
 #libfarc.a: ddt_jit.o
