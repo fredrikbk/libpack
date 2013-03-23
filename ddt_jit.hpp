@@ -4,11 +4,10 @@
 #include <vector>
 #include <mpi.h>
 
-#if ((__clang_major__ == 3) && (__clang_minor__ == 2))
-#define LLVM32 1
-#warn foo
-#else
+#if ((__clang_major__ >= 3) && (__clang_minor__ >= 3))
 #define LLVM32 0
+#else
+#define LLVM32 1
 #endif
 
 #if LLVM32
@@ -20,22 +19,26 @@
 #define LAZY 0 
 #define TIME 0 
 
+#define DDT_OUTPUT     0 
+#define LLVM_OUTPUT    0 
+#define LLVM_OPTIMIZE  0 
+
 /* Base class for all datatypes */
 class FARC_Datatype {
 
     public:
     FARC_Datatype() { this->packer = NULL; this->unpacker = NULL; }
     virtual ~FARC_Datatype() {}
-    virtual llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
-    virtual llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
+    virtual void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
+    virtual void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     virtual int getExtend() = 0;
     virtual int getSize() = 0;
 
     void (*packer)(void*, int, void*);
     void (*unpacker)(void*, int, void*);
 
-	llvm::Function* FPack;
-	llvm::Function* FUnpack;
+    llvm::Function* FPack;
+    llvm::Function* FUnpack;
 };
 
 /* Class for primitive types, such as MPI_INT, MPI_BYTE, etc */
@@ -47,8 +50,8 @@ class FARC_PrimitiveDatatype : public FARC_Datatype {
 
     public:
     FARC_PrimitiveDatatype(MPI_Datatype type);
-    llvm::Value* Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    llvm::Value* Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
 
@@ -63,8 +66,8 @@ class FARC_ContiguousDatatype : public FARC_Datatype {
 
     public:
     FARC_ContiguousDatatype(FARC_Datatype* type, int count) : FARC_Datatype(), Basetype(type), Count(count) {}
-    llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
 
@@ -80,8 +83,8 @@ class FARC_VectorDatatype : public FARC_Datatype {
 
     public:
     FARC_VectorDatatype(FARC_Datatype* type, int count, int blocklen, int stride) : FARC_Datatype(), Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
-    llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
 
@@ -97,8 +100,8 @@ class FARC_HVectorDatatype : public FARC_Datatype {
 
     public:
     FARC_HVectorDatatype(FARC_Datatype* type, int count, int blocklen, int stride) :  FARC_Datatype(), Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
-    llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
 
@@ -115,8 +118,8 @@ class FARC_HIndexedDatatype : public FARC_Datatype {
 
     public:
     FARC_HIndexedDatatype(int count, int* blocklen, long* displ, FARC_Datatype* basetype);
-    llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
 
@@ -133,8 +136,8 @@ class FARC_IndexedBlockDatatype : public FARC_Datatype {
 
     public:
     FARC_IndexedBlockDatatype(int count, int blocklen, int* displ, FARC_Datatype* basetype);
-    llvm::Value *Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    llvm::Value *Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
 
@@ -150,8 +153,8 @@ class FARC_StructDatatype : public FARC_Datatype {
 
     public:
     FARC_StructDatatype(int count, int* blocklen, long*  displ, FARC_Datatype** types);
-    llvm::Value* Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    llvm::Value* Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen(llvm::Value *compactbuf, llvm::Value *scatteredbuf, llvm::Value* incount, bool pack);
     int getExtend();
     int getSize();
@@ -163,7 +166,7 @@ class FARC_StructDatatype : public FARC_Datatype {
 void FARC_DDT_Init();
 void FARC_DDT_Finalize();
 
-FARC_Datatype* FARC_DDT_Commit(FARC_Datatype* ddt);
+void FARC_DDT_Commit(FARC_Datatype* ddt);
 void FARC_DDT_Lazy_Unpack_Commit(FARC_Datatype* ddt);  // This function should be removed
 void FARC_DDT_Free(FARC_Datatype* ddt);
 

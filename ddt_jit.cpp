@@ -23,10 +23,7 @@
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 
-
-#define LLVM_OUTPUT    0 
-#define LLVM_OPTIMIZE  0 
-#define LLVM_VERIFY    LLVM_OUTPUT
+#define LLVM_VERIFY LLVM_OUTPUT
 
 #if LLVM_VERIFY
 #include "llvm/Analysis/Verifier.h"
@@ -370,7 +367,7 @@ int FARC_PrimitiveDatatype::getSize() {
     return this->Size;
 }
 
-Value* FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
                             
 
     if (llvm::ConstantInt* incount_ci = dyn_cast<llvm::ConstantInt>(incount)) {
@@ -390,12 +387,9 @@ Value* FARC_PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value*
         Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
     }
 
-    // return 0 for now
-    return Constant::getNullValue(INT32);
-
 }
 
-Value* FARC_PrimitiveDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_PrimitiveDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
 
     // does exactly the same as pack for primitive types
     return this->Codegen_Pack(inbuf, incount, outbuf);
@@ -504,14 +498,12 @@ void FARC_ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbu
     i->addIncoming(nexti, LoopEndBB);
 }
 
-Value* FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, incount, outbuf, this->Basetype->getExtend(), this->Basetype->getSize(), true);
-    return Constant::getNullValue(INT32);
 }
 
-Value* FARC_ContiguousDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_ContiguousDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, incount, outbuf, this->Basetype->getSize(), this->Basetype->getExtend(), false);
-    return Constant::getNullValue(INT32);
 }
 
 
@@ -524,16 +516,14 @@ int FARC_VectorDatatype::getSize() {
     return this->Count * this->Blocklen*this->Basetype->getSize();
 }
 
-Value* FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count,
             this->Blocklen, this->Basetype->getExtend() * this->Stride, this->Basetype->getSize() * this->Blocklen, true);
-    return Constant::getNullValue(INT32);
 }
 
-Value* FARC_VectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_VectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Basetype->getSize() * this->Blocklen, this->Basetype->getExtend() * this->Stride, false);
-    return Constant::getNullValue(INT32);
 }
 
 
@@ -550,16 +540,14 @@ int FARC_HVectorDatatype::getSize() {
 
 }
 
-Value* FARC_HVectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_HVectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Stride, this->Basetype->getSize() * this->Blocklen, true);
-    return Constant::getNullValue(INT32);
 }
 
-Value* FARC_HVectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_HVectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Basetype->getSize() * this->Blocklen, this->Stride, false);
-    return Constant::getNullValue(INT32);
 }
 
 
@@ -662,14 +650,12 @@ void FARC_HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Valu
     i->addIncoming(nexti, LoopEndBB);
 }
 
-Value* FARC_HIndexedDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_HIndexedDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(outbuf, inbuf, incount, true);
-    return Constant::getNullValue(INT32);
 }
 
-Value* FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_HIndexedDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, outbuf, incount, false);
-    return Constant::getNullValue(INT32);
 }
 
 
@@ -777,14 +763,12 @@ void FARC_IndexedBlockDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, 
 
 }
 
-Value* FARC_IndexedBlockDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_IndexedBlockDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(outbuf, inbuf, incount, true);
-    return Constant::getNullValue(INT32);
 }
 
-Value* FARC_IndexedBlockDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void FARC_IndexedBlockDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, outbuf, incount, false);
-    return Constant::getNullValue(INT32);
 }
 
 
@@ -885,18 +869,12 @@ void FARC_StructDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value*
 
 }
 
-Value* FARC_StructDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
-    
+void FARC_StructDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(outbuf, inbuf, incount, true);
-    return Constant::getNullValue(INT32);
-
 }
 
-Value* FARC_StructDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
-    
+void FARC_StructDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
     Codegen(inbuf, outbuf, incount, false);
-    return Constant::getNullValue(INT32);
-
 }
 
 
@@ -924,7 +902,7 @@ void generate_pack_function(FARC_Datatype* ddt) {
     Builder.SetInsertPoint(BB);
 
     // generate code for the datatype
-    Value* RetVal = ddt->Codegen_Pack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
+    ddt->Codegen_Pack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
     Builder.CreateRetVoid();
 
 #if LLVM_VERIFY
@@ -980,7 +958,7 @@ void generate_unpack_function(FARC_Datatype* ddt) {
     Builder.SetInsertPoint(BB);
 
     // generate code for the datatype
-    Value* RetVal = ddt->Codegen_Unpack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
+    ddt->Codegen_Unpack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
     Builder.CreateRetVoid();
 
 #if LLVM_VERIFY
@@ -1005,7 +983,7 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 #endif
 
     ddt->unpacker = (void (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
-	ddt->FUnpack = F;
+    ddt->FUnpack = F;
 
 #if TIME
     HRT_GET_TIMESTAMP(stop);
@@ -1014,15 +992,11 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 #endif
 }
 
-FARC_Datatype* FARC_DDT_Commit(FARC_Datatype* ddt) {
-
+void FARC_DDT_Commit(FARC_Datatype* ddt) {
 #if !LAZY
     generate_pack_function(ddt);
     generate_unpack_function(ddt);
 #endif
-
-    return ddt;
-
 }
 
 // this calls the pack/unpack function
