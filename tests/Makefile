@@ -5,10 +5,12 @@ LDLIBS=$(shell llvm-config --libs all)
 LDFLAGS=$(shell llvm-config --ldflags) #-dynamic
 CPPFLAGS= -O3 $(shell llvm-config --cppflags) -I../..
 
-BINARIES=$(shell ls *.cpp | sed -e 's/.cpp$$//g';)
+TESTS=$(shell ls *.cpp | sed -e 's/.cpp$$//g';)
 
-all: $(BINARIES)
-	./runtests.sh
+all: $(TESTS)
+
+run: all
+	@for i in $(TESTS); do ./$$i; done
 
 %.o: %.cpp
 	$(CXX) -c -o $@ $< $(CPPFLAGS)
@@ -19,7 +21,7 @@ all: $(BINARIES)
 -include Makefile.deps
 
 clean:
-	rm -f $(BINARIES)
+	rm -f $(TESTS)
 	rm -f *.o
 	rm -f Makefile.deps
 

@@ -1,4 +1,5 @@
 #include <string>
+#include <mpi.h>
 
 #include "test.hpp"
 #include "../ddt_jit.hpp"
@@ -42,7 +43,7 @@ int main(int argc, char** argv) {
     MPI_Type_commit(&mpitype);
 
     FARC_DDT_Init();
-    FARC_Datatype* types_f[3] = {new FARC_PrimitiveDatatype(MPI_INT), new FARC_PrimitiveDatatype(MPI_INT), new FARC_PrimitiveDatatype(MPI_CHAR)};
+    FARC_Datatype* types_f[3] = {new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::INT), new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::INT), new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::CHAR)};
     FARC_Datatype* t1 = new FARC_StructDatatype(3, blocklen, disp, types_f);
     FARC_DDT_Commit(t1);
     FARC_DDT_Pack(farc_inbuf, farc_outbuf, t1, 2);

@@ -1,20 +1,8 @@
 #ifndef DDT_JIT_H
 #define DDT_JIT_H
 
+#include <cstdlib>
 #include <vector>
-#include <mpi.h>
-
-#if ((__clang_major__ >= 3) && (__clang_minor__ >= 3))
-#define LLVM32 0
-#else
-#define LLVM32 1
-#endif
-
-#if LLVM32
-#include <llvm/Value.h>
-#else
-#include <llvm/IR/Value.h>
-#endif
 
 #define LAZY 0 
 #define TIME 0 
@@ -22,6 +10,12 @@
 #define DDT_OUTPUT     0 
 #define LLVM_OUTPUT    0 
 #define LLVM_OPTIMIZE  0 
+
+/* Forward declare llvm values */
+namespace llvm {
+    class Value;
+    class Function;
+}
 
 /* Base class for all datatypes */
 class FARC_Datatype {
@@ -43,13 +37,19 @@ class FARC_Datatype {
 
 /* Class for primitive types, such as MPI_INT, MPI_BYTE, etc */
 class FARC_PrimitiveDatatype : public FARC_Datatype {
+    // TODO: Add more datatypes
+    public:
+    enum PrimitiveType { BYTE, CHAR, DOUBLE, INT };   
 
-    MPI_Datatype Type; // this MUST be a primitive type
+    private:
+    FARC_PrimitiveDatatype::PrimitiveType Type;
     int Extend;
     int Size;
 
     public:
-    FARC_PrimitiveDatatype(MPI_Datatype type);
+
+
+    FARC_PrimitiveDatatype(PrimitiveType type);
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();

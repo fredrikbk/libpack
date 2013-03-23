@@ -5,6 +5,12 @@
 #include <vector>
 #include <cstdio>
 
+#if ((__clang_major__ >= 3) && (__clang_minor__ >= 3))
+#define LLVM32 0
+#else
+#define LLVM32 1
+#endif
+
 #if LLVM32
 #include "llvm/Module.h"
 #include "llvm/LLVMContext.h"
@@ -345,14 +351,14 @@ void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Datatype* b
 }
 
 /* FARC_PrimitiveDatatype */
-FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(MPI_Datatype type) : FARC_Datatype() {
+FARC_PrimitiveDatatype::FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::PrimitiveType type) : FARC_Datatype() {
 
     this->Type = type;
 
-    if (Type == MPI_BYTE)   this->Extend = 1;
-    if (Type == MPI_CHAR)   this->Extend = 1;
-    if (Type == MPI_DOUBLE) this->Extend = sizeof(double);
-    if (Type == MPI_INT)    this->Extend = sizeof(int);
+    if (Type == BYTE)   this->Extend = 1;
+    if (Type == CHAR)   this->Extend = 1;
+    if (Type == DOUBLE) this->Extend = sizeof(double);
+    if (Type == INT)    this->Extend = sizeof(int);
     //TODO add more
 
     this->Size = this->Extend;

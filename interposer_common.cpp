@@ -36,10 +36,10 @@ static FARC_Datatype* g_types[DDT_FAST_CACHE_SIZE];
 static std::queue<int> g_types_freelist;
 static std::map<MPI_Datatype, FARC_Datatype*> g_types_fallback;
 
-static FARC_PrimitiveDatatype farc_double(MPI_DOUBLE);
-static FARC_PrimitiveDatatype farc_int(MPI_INT);
-static FARC_PrimitiveDatatype farc_byte(MPI_BYTE);
-static FARC_PrimitiveDatatype farc_char(MPI_CHAR);
+static FARC_PrimitiveDatatype farc_double(FARC_PrimitiveDatatype::DOUBLE);
+static FARC_PrimitiveDatatype farc_int(FARC_PrimitiveDatatype::INT);
+static FARC_PrimitiveDatatype farc_byte(FARC_PrimitiveDatatype::BYTE);
+static FARC_PrimitiveDatatype farc_char(FARC_PrimitiveDatatype::CHAR);
 //TODO add other primitive types here
 
 static inline MPI_Datatype datatype_handle_create() {

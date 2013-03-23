@@ -33,7 +33,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 
     for (int o=0; o<outer_runs; o++) {
         HRT_GET_TIMESTAMP(start);
-        FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_DOUBLE);
+        FARC_Datatype* t1 = new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::DOUBLE);
         FARC_Datatype* t2 = new FARC_VectorDatatype(t1, inner_cnt, blklen, stride);
         FARC_DDT_Commit(t2);
         int t2_size = t2->getSize();

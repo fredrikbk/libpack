@@ -1,4 +1,5 @@
 #include <string>
+#include <mpi.h>
 
 #include <ddt_jit.hpp>
 #include "../../tests/test.hpp"
@@ -47,14 +48,14 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     int data_size = sizeof(double)*inner_cnt * outer_cnt * blklen;
     int buffer_size = sizeof(double)*((inner_cnt-1)*stride+blklen) * outer_cnt;
 
-	init_in_and_out_buffer(buffer_size, &mpi_inbuf, &mpi_outbuf);
-	init_in_and_out_buffer(buffer_size, &pmpi_inbuf, &pmpi_outbuf);
-	init_in_and_out_buffer(buffer_size, &farc_inbuf, &farc_outbuf);
-	init_in_and_out_buffer(buffer_size, reinterpret_cast<char**>(&cpp_inbuf),  reinterpret_cast<char**>(&cpp_outbuf));
+    init_in_and_out_buffer(buffer_size, &mpi_inbuf, &mpi_outbuf);
+    init_in_and_out_buffer(buffer_size, &pmpi_inbuf, &pmpi_outbuf);
+    init_in_and_out_buffer(buffer_size, &farc_inbuf, &farc_outbuf);
+    init_in_and_out_buffer(buffer_size, reinterpret_cast<char**>(&cpp_inbuf),  reinterpret_cast<char**>(&cpp_outbuf));
 
     for (int o=0; o<outer_runs; o++) {
         HRT_GET_TIMESTAMP(start);
-        FARC_Datatype* t1 = new FARC_PrimitiveDatatype(MPI_DOUBLE);
+        FARC_Datatype* t1 = new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::DOUBLE);
         FARC_Datatype* t2 = new FARC_VectorDatatype(t1, inner_cnt, blklen, stride);
         FARC_DDT_Commit(t2);
         HRT_GET_TIMESTAMP(stop);
