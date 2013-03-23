@@ -7,7 +7,7 @@
 #define LAZY 0 
 #define TIME 0 
 
-#define DDT_OUTPUT     1 
+#define DDT_OUTPUT     0 
 #define LLVM_OUTPUT    0 
 #define LLVM_OPTIMIZE  0 
 
