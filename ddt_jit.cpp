@@ -352,7 +352,7 @@ static void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, FARC_Data
 
 void printindent(int indent) {
     for(int i=0; i<indent; i++) {
-        printf("  ");
+        fprintf(stderr, "  ");
     }
 }
 
@@ -410,22 +410,22 @@ void FARC_PrimitiveDatatype::print(int indent) {
     printindent(indent);
     switch (this->Type) {
     case BYTE:
-        printf("byte");
+        fprintf(stderr, "byte");
         break;
     case CHAR:
-        printf("char");
+        fprintf(stderr, "char");
         break;
     case DOUBLE:
-        printf("double");
+        fprintf(stderr, "double");
         break;
     case INT:
-        printf("int");
+        fprintf(stderr, "int");
         break;
     default:
-        printf("N/A");
+        fprintf(stderr, "N/A");
         break;
     }
-    printf("\n");
+    fprintf(stderr, "\n");
 }
 
 /* Value* FARC_PrimitiveDatatype::Codegen_Pack_partial(Value* inbuf, Value* incount, Value* outbuf, Value* outbuf_from, Value* outbuf_to) {
@@ -566,7 +566,7 @@ int FARC_VectorDatatype::getSize() {
 
 void FARC_VectorDatatype::print(int indent) {
     printindent(indent);
-    printf("vector(count=%d, blocklen=%d, stride=%d)\n", this->Count, this->Blocklen, this->Stride);
+    fprintf(stderr, "vector(count=%d, blocklen=%d, stride=%d)\n", this->Count, this->Blocklen, this->Stride);
     Basetype->print(indent+1);
 }
 
@@ -592,7 +592,7 @@ int FARC_HVectorDatatype::getSize() {
 
 void FARC_HVectorDatatype::print(int indent) {
     printindent(indent);
-    printf("hvector(count=%d, blocklen=%d, stride=%d)\n", this->Count, this->Blocklen, this->Stride);
+    fprintf(stderr, "hvector(count=%d, blocklen=%d, stride=%d)\n", this->Count, this->Blocklen, this->Stride);
     Basetype->print(indent+1);
 }
 
@@ -709,10 +709,10 @@ int FARC_IndexedBlockDatatype::getSize() {
 
 void FARC_IndexedBlockDatatype::print(int indent) {
     printindent(indent);
-    printf("hindexed(count=%d, blocklen=%d)\n", this->Count, this->Blocklen);
+    fprintf(stderr, "hindexed(count=%d, blocklen=%d)\n", this->Count, this->Blocklen);
     for (int i=0; i<Displ.size(); i++) {
         printindent(indent+1);
-        printf("(displ=%d)\n", Displ[i]);
+        fprintf(stderr, "(displ=%d)\n", Displ[i]);
     }
     Basetype->print(indent+2);
 }
@@ -827,10 +827,10 @@ int FARC_HIndexedDatatype::getSize() {
 
 void FARC_HIndexedDatatype::print(int indent) {
     printindent(indent);
-    printf("hindexed(count=%d)\n", this->Count);
+    fprintf(stderr, "hindexed(count=%d)\n", this->Count);
     for (int i=0; i<Displ.size(); i++) {
         printindent(indent+1);
-        printf("(displ=%d, blocklen=%d)\n", Displ[i], Blocklen[i]);
+        fprintf(stderr, "(displ=%d, blocklen=%d)\n", Displ[i], Blocklen[i]);
     }
     Basetype->print(indent+2);
 }
@@ -943,10 +943,10 @@ int FARC_StructDatatype::getSize() {
 
 void FARC_StructDatatype::print(int indent) {
     printindent(indent);
-    printf("hindexed(count=%d)\n", this->Count);
+    fprintf(stderr, "hindexed(count=%d)\n", this->Count);
     for (int i=0; i<Displ.size(); i++) {
         printindent(indent+1);
-        printf("(displ=%d, blocklen=%d)\n", Displ[i], Blocklen[i]);
+        fprintf(stderr, "(displ=%d, blocklen=%d)\n", Displ[i], Blocklen[i]);
         Types[i]->print(indent+2);
     }
 }
@@ -1068,7 +1068,6 @@ void generate_unpack_function(FARC_Datatype* ddt) {
 
 void FARC_DDT_Commit(FARC_Datatype* ddt) {
 #if DDT_OUTPUT
-    printf("\n");
     ddt->print(0);
 #endif
 #if !LAZY
