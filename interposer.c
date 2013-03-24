@@ -154,3 +154,22 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source, int tag, 
   
 }
 
+int MPI_Pack(void *inbuf, int incount, MPI_Datatype datatype, void *outbuf, int outsize, int *position, MPI_Comm comm) {
+
+    //TODO we ignore position and outsize
+    interposer_pack_providedbuf(inbuf, incount, datatype, outbuf);
+
+    return MPI_SUCCESS;
+
+}
+
+int MPI_Unpack(void *inbuf, int insize, int *position, void *outbuf, int outcount, MPI_Datatype datatype, MPI_Comm comm) {
+
+    //TODO we ignore position
+    interposer_unpack(outbuf, outcount, datatype, inbuf);
+
+    return MPI_SUCCESS;
+
+}
+
+

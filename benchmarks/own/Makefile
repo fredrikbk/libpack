@@ -25,6 +25,9 @@ speedtest_vector_pack: speedtest_vector_pack.o ../../ddt_jit.o
 speedtest_vector_send: speedtest_vector_send.o ../../interposer.o ../../interposer_common.o ../../ddt_jit.o
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
+speedtest_indexed_block_pack: speedtest_indexed_block_pack.o ../../ddt_jit.o
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
 clean:
 	rm -f $(BINARIES) *.o
 

@@ -4,11 +4,15 @@
 #include <map>
 #include <cstdio>
 
-#if ((__clang_major__ >= 3) && (__clang_minor__ >= 3))
+// this is useless if we are not compiling with clang,
+// we should have a configure script for this
+//#if ((__clang_major__ >= 3) && (__clang_minor__ >= 3))
+//#define LLVM32 0
+//#else
+//#define LLVM32 1
+//#endif
+
 #define LLVM32 0
-#else
-#define LLVM32 1
-#endif
 
 #if LLVM32
 #include "llvm/Module.h"
@@ -366,6 +370,12 @@ PrimitiveDatatype::PrimitiveDatatype(PrimitiveDatatype::PrimitiveType type) : Da
 
 }
 
+PrimitiveDatatype* PrimitiveDatatype::Clone() {
+
+    PrimitiveDatatype* t_new = new PrimitiveDatatype(this->Type);
+    return t_new;
+}
+
 void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
                             
 
@@ -464,6 +474,27 @@ void PrimitiveDatatype::print(std::string indent) {
 
 
 /* Class ContiguousDatatype */
+ContiguousDatatype::ContiguousDatatype(Datatype* type, int count) {
+
+    this->Basetype = type->Clone();
+    this->Count = count;
+
+}
+
+ContiguousDatatype::~ContiguousDatatype(void) {
+    
+    delete(this->Basetype);
+
+}
+
+ContiguousDatatype* ContiguousDatatype::Clone() {
+
+    ContiguousDatatype* t_new = new ContiguousDatatype(this->Basetype, this->Count);
+
+    return t_new;
+
+}
+
 void ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, int elemstride_in, int elemstride_out, bool pack) {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
@@ -538,6 +569,29 @@ void ContiguousDatatype::print(std::string indent) {
 
 
 /* Class VectorDatatype */
+VectorDatatype::VectorDatatype(Datatype* type, int count, int blocklen, int stride) {
+
+    this->Basetype = type->Clone();
+    this->Count = count;
+    this->Blocklen = blocklen;
+    this->Stride = stride;
+
+} 
+
+VectorDatatype::~VectorDatatype(void) {
+
+    delete(this->Basetype);
+
+}
+
+VectorDatatype* VectorDatatype::Clone() {
+
+    VectorDatatype* t_new = new VectorDatatype(this->Basetype, this->Count, this->Blocklen, this->Stride);
+
+    return t_new;
+
+}
+
 void VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count,
             this->Blocklen, this->Basetype->getExtent() * this->Stride, this->Basetype->getSize() * this->Blocklen, true);
@@ -563,6 +617,29 @@ void VectorDatatype::print(std::string indent) {
 
 
 /* Class HVectorDatatype */
+HVectorDatatype::HVectorDatatype(Datatype* type, int count, int blocklen, int stride) {
+
+    this->Basetype = type->Clone();
+    this->Count = count;
+    this->Blocklen = blocklen;
+    this->Stride = stride;
+
+} 
+
+HVectorDatatype* HVectorDatatype::Clone() {
+
+    HVectorDatatype* t_new = new HVectorDatatype(this->Basetype, this->Count, this->Blocklen, this->Stride);
+
+    return t_new;
+
+}
+
+HVectorDatatype::~HVectorDatatype(void) {
+
+    delete(this->Basetype);
+
+}
+
 void HVectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     vectorCodegen(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Stride, this->Basetype->getSize() * this->Blocklen, true);
@@ -591,9 +668,23 @@ void HVectorDatatype::print(std::string indent) {
 IndexedBlockDatatype::IndexedBlockDatatype(int count, int blocklen, int* displ, Datatype* basetype) : Datatype() {
 
     this->Count = count;
-    this->Basetype = basetype;
+    this->Basetype = basetype->Clone();
     this->Blocklen = blocklen;
     for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
+
+}
+
+IndexedBlockDatatype::~IndexedBlockDatatype(void) {
+
+    delete(this->Basetype);
+
+}
+
+IndexedBlockDatatype* IndexedBlockDatatype::Clone() {
+
+    IndexedBlockDatatype* t_new = new IndexedBlockDatatype(this->Count, this->Blocklen, &(this->Displ[0]), this->Basetype);
+
+    return t_new;
 
 }
 
@@ -710,9 +801,23 @@ void IndexedBlockDatatype::print(std::string indent) {
 HIndexedDatatype::HIndexedDatatype(int count, int* blocklen, long* displ, Datatype* basetype) : Datatype() {
 
     this->Count = count;
-    this->Basetype = basetype;
+    this->Basetype = basetype->Clone();
     for (int i=0; i<count; i++) this->Blocklen.push_back(blocklen[i]);
     for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
+
+}
+
+HIndexedDatatype::~HIndexedDatatype(void) {
+
+    delete(this->Basetype);
+
+}
+
+HIndexedDatatype* HIndexedDatatype::Clone() {
+
+    HIndexedDatatype* t_new = new HIndexedDatatype(this->Count, &(this->Blocklen[0]), &(this->Displ[0]), this->Basetype);
+
+    return t_new;
 
 }
 
@@ -828,7 +933,21 @@ StructDatatype::StructDatatype(int count, int* blocklen, long*  displ, Datatype*
     this->Count = count;
     for (int i=0; i<count; i++) Blocklen.push_back(blocklen[i]);
     for (int i=0; i<count; i++) Displ.push_back(displ[i]);
-    for (int i=0; i<count; i++) Types.push_back(types[i]);
+    for (int i=0; i<count; i++) Types.push_back(types[i]->Clone());
+
+}
+
+StructDatatype::~StructDatatype(void) {
+
+    for (int i=0; i<this->Count; i++) delete(Types[i]);
+
+}
+
+StructDatatype* StructDatatype::Clone() {
+
+    StructDatatype* t_new = new StructDatatype(this->Count, &(this->Blocklen[0]), &(this->Displ[0]), &(this->Types[0]));
+
+    return t_new;
 
 }
 

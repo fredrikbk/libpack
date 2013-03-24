@@ -19,6 +19,7 @@ void* interposer_buffer_alloc(int count, MPI_Datatype datatype, int* buf_size);
 void interposer_buffer_free(void* buf);
 void interposer_request_register(void *tmpbuf, void *usrbuf, int count, MPI_Datatype datatype, MPI_Request *request);
 void* interposer_pack(void *data, int count, MPI_Datatype datatype, int *buf_size);
+void interposer_pack_providedbuf(void* inbuf, int incount, MPI_Datatype datatype, void *outbuf);
 void interposer_unpack(void *data, int count, MPI_Datatype datatype, void* buf);
 
 #endif

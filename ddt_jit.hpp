@@ -26,6 +26,7 @@ class Datatype {
     public:
     Datatype() { this->packer = NULL; this->unpacker = NULL; }
     virtual ~Datatype() {}
+    virtual Datatype* Clone() = 0;
     virtual void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     virtual void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     virtual int getExtent() = 0;
@@ -51,11 +52,13 @@ class PrimitiveDatatype : public Datatype {
 
     public:
     PrimitiveDatatype(PrimitiveType type);
+    ~PrimitiveDatatype(void);
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
     void print(std::string indent);
+    PrimitiveDatatype* Clone();
 
 };
 
@@ -67,12 +70,14 @@ class ContiguousDatatype : public Datatype {
     void Codegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf, int elemstride_in, int elemstride_out, bool pack);
 
     public:
-    ContiguousDatatype(Datatype* type, int count) : Datatype(), Basetype(type), Count(count) {}
+    ContiguousDatatype(Datatype* type, int count);
+    ~ContiguousDatatype(void);
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
     void print(std::string indent);
+    ContiguousDatatype* Clone();
 
 };
 
@@ -85,12 +90,14 @@ class VectorDatatype : public Datatype {
     int Stride;
 
     public:
-    VectorDatatype(Datatype* type, int count, int blocklen, int stride) : Datatype(), Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
+    VectorDatatype(Datatype* type, int count, int blocklen, int stride); 
+    ~VectorDatatype(void); 
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
     void print(std::string indent);
+    VectorDatatype* Clone();
 
 };
 
@@ -103,12 +110,14 @@ class HVectorDatatype : public Datatype {
     int Stride;
 
     public:
-    HVectorDatatype(Datatype* type, int count, int blocklen, int stride) :  Datatype(), Basetype(type), Count(count), Blocklen(blocklen), Stride(stride) {}
+    HVectorDatatype(Datatype* type, int count, int blocklen, int stride);
+    ~HVectorDatatype(void);
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
     void print(std::string indent);
+    HVectorDatatype* Clone();
 
 };
 
@@ -123,11 +132,13 @@ class IndexedBlockDatatype : public Datatype {
 
     public:
     IndexedBlockDatatype(int count, int blocklen, int* displ, Datatype* basetype);
+    ~IndexedBlockDatatype(void);
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
     void print(std::string indent);
+    IndexedBlockDatatype* Clone();
 
 };
 
@@ -137,16 +148,18 @@ class HIndexedDatatype : public Datatype {
     int Count;
     Datatype* Basetype;
     std::vector<int> Blocklen;
-    std::vector<int> Displ;
+    std::vector<long> Displ;
     void Codegen(llvm::Value *contig_buf, llvm::Value *hindexed_buf, llvm::Value* incount, bool gather);
 
     public:
     HIndexedDatatype(int count, int* blocklen, long* displ, Datatype* basetype);
+    ~HIndexedDatatype(void);
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
     void print(std::string indent);
+    HIndexedDatatype* Clone();
 
 };
 
@@ -156,16 +169,18 @@ class StructDatatype : public Datatype {
     int Count;
     std::vector<Datatype*> Types;
     std::vector<int> Blocklen;
-    std::vector<int> Displ;
+    std::vector<long> Displ;
 
     public:
     StructDatatype(int count, int* blocklen, long*  displ, Datatype** types);
+    ~StructDatatype(void);
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen(llvm::Value *compactbuf, llvm::Value *scatteredbuf, llvm::Value* incount, bool pack);
     int getExtent();
     int getSize();
     void print(std::string indent);
+    StructDatatype* Clone();
 
 };
 

@@ -226,6 +226,10 @@ void* interposer_pack(void *data, int count, MPI_Datatype datatype, int *buf_siz
     return buf;
 }
 
+void interposer_pack_providedbuf(void* inbuf, int incount, MPI_Datatype datatype, void *outbuf) {
+    DDT_Pack(inbuf, outbuf, datatype_retrieve(datatype), incount);
+}
+
 void interposer_unpack(void *data, int count, MPI_Datatype datatype, void* buf) {
     DDT_Unpack(buf, data, datatype_retrieve(datatype), count);
 }
