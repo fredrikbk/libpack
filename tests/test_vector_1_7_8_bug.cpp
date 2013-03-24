@@ -4,6 +4,10 @@
 #include "../ddt_jit.hpp"
 #include "test.hpp"
 
+#define count    1
+#define blocklen 7
+#define stride   8
+
 int main(int argc, char** argv) {
 
     int position = 0;
@@ -18,11 +22,11 @@ int main(int argc, char** argv) {
 
     farc::DDT_Init();
     farc::Datatype* t1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
-    farc::Datatype* t2 = new farc::VectorDatatype(t1, 64, 7, 6480);
+    farc::Datatype* t2 = new farc::VectorDatatype(t1, count, blocklen, stride);
     farc::DDT_Commit(t2);
 
     MPI_Datatype newtype;
-    MPI_Type_vector(64, 7, 6480, MPI_INT, &newtype);
+    MPI_Type_vector(count, blocklen, stride, MPI_DOUBLE, &newtype);
     MPI_Type_commit(&newtype);
 
     int extent = t2->getExtent();
