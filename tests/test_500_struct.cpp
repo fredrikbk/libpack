@@ -42,11 +42,11 @@ int main(int argc, char** argv) {
     MPI_Type_struct(3, blocklen, disp, type, &mpitype);
     MPI_Type_commit(&mpitype);
 
-    FARC_DDT_Init();
-    FARC_Datatype* types_f[3] = {new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::INT), new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::INT), new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::CHAR)};
-    FARC_Datatype* t1 = new FARC_StructDatatype(3, blocklen, disp, types_f);
-    FARC_DDT_Commit(t1);
-    FARC_DDT_Pack(farc_inbuf, farc_outbuf, t1, 2);
+    farc::DDT_Init();
+    farc::Datatype* types_f[3] = {new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT), new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT), new farc::PrimitiveDatatype(farc::PrimitiveDatatype::CHAR)};
+    farc::Datatype* t1 = new farc::StructDatatype(3, blocklen, disp, types_f);
+    farc::DDT_Commit(t1);
+    farc::DDT_Pack(farc_inbuf, farc_outbuf, t1, 2);
 
     int position = 0;
     MPI_Pack(mpi_inbuf, 2, mpitype, mpi_outbuf, 20*sizeof(int), &position, MPI_COMM_WORLD);

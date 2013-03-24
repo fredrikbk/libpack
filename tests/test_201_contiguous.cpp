@@ -16,11 +16,11 @@ int main(int argc, char** argv) {
     test_start("unpack(2, contiguous[[int], count=8])");
     init_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
-    FARC_DDT_Init();
-    FARC_Datatype* t1 = new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::INT);
-    FARC_Datatype* t2 = new FARC_ContiguousDatatype(t1, 8);
-    FARC_DDT_Commit(t2);
-    FARC_DDT_Unpack(farc_inbuf, farc_outbuf, t2, 2);
+    farc::DDT_Init();
+    farc::Datatype* t1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
+    farc::Datatype* t2 = new farc::ContiguousDatatype(t1, 8);
+    farc::DDT_Commit(t2);
+    farc::DDT_Unpack(farc_inbuf, farc_outbuf, t2, 2);
 
     int position = 0;
     MPI_Datatype new_contig;

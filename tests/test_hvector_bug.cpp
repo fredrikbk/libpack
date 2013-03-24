@@ -33,11 +33,11 @@ int main(int argc, char** argv) {
         farc_outbuf[i] = 0;
     }
 
-    FARC_DDT_Init();
-    FARC_Datatype* t1 = new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::DOUBLE);
-    FARC_Datatype* t2 = new FARC_HVectorDatatype(t1, count, blocklen, stride);
-    FARC_DDT_Commit(t2);
-    FARC_DDT_Pack((char*)farc_inbuf, (char*)farc_outbuf, t2, 1);
+    farc::DDT_Init();
+    farc::Datatype* t1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
+    farc::Datatype* t2 = new farc::HVectorDatatype(t1, count, blocklen, stride);
+    farc::DDT_Commit(t2);
+    farc::DDT_Pack((char*)farc_inbuf, (char*)farc_outbuf, t2, 1);
 
     MPI_Datatype newtype;
     MPI_Type_hvector(count, blocklen, stride, MPI_DOUBLE, &newtype);

@@ -23,11 +23,11 @@ int main(int argc, char** argv) {
     MPI_Type_create_hindexed(3, blocklen, disp, MPI_INT, &mpitype);
     MPI_Type_commit(&mpitype);
 
-    FARC_DDT_Init();
-    FARC_Datatype* t1 = new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::INT);
-    FARC_Datatype* t2 = new FARC_HIndexedDatatype(3, blocklen, disp, t1);
-    FARC_DDT_Commit(t2);
-    FARC_DDT_Unpack(farc_inbuf, farc_outbuf, t2, 2);
+    farc::DDT_Init();
+    farc::Datatype* t1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
+    farc::Datatype* t2 = new farc::HIndexedDatatype(3, blocklen, disp, t1);
+    farc::DDT_Commit(t2);
+    farc::DDT_Unpack(farc_inbuf, farc_outbuf, t2, 2);
 
     int position = 0;
     MPI_Unpack(mpi_inbuf, 20*sizeof(int), &position, mpi_outbuf, 2, mpitype, MPI_COMM_WORLD);

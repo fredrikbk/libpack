@@ -28,7 +28,7 @@ interposerf.o: interposerf.f interposer_common.h
 interposer_common.o: interposer_common.cpp ddt_jit.hpp
 	$(CXX) $(CFLAGS) -DHRT_ARCH=2 -c $< -o $@
 
-ddt_jit.o: ddt_jit.cpp
+ddt_jit.o: ddt_jit.cpp ddt_jit.hpp
 	$(CXX) $(CFLAGS) -DHRT_ARCH=2 -c ddt_jit.cpp -o ddt_jit.o
 
 

@@ -10,6 +10,12 @@ BINARIES=$(shell ls *.cpp | sed -e 's/.cpp//';)
 
 all: $(BINARIES)
 
+../../ddt_jit.o: ../../ddt_jit.cpp ../../ddt_jit.hpp
+	make -C ../../ ddt_jit.o
+
+%: %.o ../../ddt_jit.o
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
 %.o: %.cpp
 	$(CXX) -c -o $@ $< $(CPPFLAGS)
 

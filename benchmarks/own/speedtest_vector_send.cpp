@@ -33,9 +33,9 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 
     for (int o=0; o<outer_runs; o++) {
         HRT_GET_TIMESTAMP(start);
-        FARC_Datatype* t1 = new FARC_PrimitiveDatatype(FARC_PrimitiveDatatype::DOUBLE);
-        FARC_Datatype* t2 = new FARC_VectorDatatype(t1, inner_cnt, blklen, stride);
-        FARC_DDT_Commit(t2);
+        farc::Datatype* t1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
+        farc::Datatype* t2 = new farc::VectorDatatype(t1, inner_cnt, blklen, stride);
+        farc::DDT_Commit(t2);
         int t2_size = t2->getSize();
         HRT_GET_TIMESTAMP(stop);
         HRT_GET_ELAPSED_TICKS(start, stop, &farc_type_create);
@@ -57,7 +57,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
         for (int i=0; i<inner_runs; i++) {
             HRT_GET_TIMESTAMP(start);
             if (rank == 0) {
-                FARC_DDT_Pack(farc_inbuf, farc_outbuf, t2, outer_cnt);
+                farc::DDT_Pack(farc_inbuf, farc_outbuf, t2, outer_cnt);
                 PMPI_Send(farc_outbuf, t2_size, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
             }
             else {
@@ -123,8 +123,8 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 
         PMPI_Type_free(&newtype);
         MPI_Type_free(&newtype_farc);
-        FARC_DDT_Free(t1);
-        FARC_DDT_Free(t2);
+        farc::DDT_Free(t1);
+        farc::DDT_Free(t2);
 
 	  }
 	

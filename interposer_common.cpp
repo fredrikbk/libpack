@@ -13,6 +13,8 @@
 //static HRT_TIMESTAMP_T start, stop;
 //static uint64_t tmp;
 
+using namespace farc;
+
 struct Request {
     MPI_Request *mpi_req;
 
@@ -32,14 +34,14 @@ static std::list<struct Request> g_outstanding_requests;
 
 /* Datatype lookup data structures */
 #define DDT_FAST_CACHE_SIZE 50
-static FARC_Datatype* g_types[DDT_FAST_CACHE_SIZE];
+static Datatype* g_types[DDT_FAST_CACHE_SIZE];
 static std::queue<int> g_types_freelist;
-static std::map<MPI_Datatype, FARC_Datatype*> g_types_fallback;
+static std::map<MPI_Datatype, Datatype*> g_types_fallback;
 
-static FARC_PrimitiveDatatype farc_double(FARC_PrimitiveDatatype::DOUBLE);
-static FARC_PrimitiveDatatype farc_int(FARC_PrimitiveDatatype::INT);
-static FARC_PrimitiveDatatype farc_byte(FARC_PrimitiveDatatype::BYTE);
-static FARC_PrimitiveDatatype farc_char(FARC_PrimitiveDatatype::CHAR);
+static PrimitiveDatatype farc_double(PrimitiveDatatype::DOUBLE);
+static PrimitiveDatatype farc_int(PrimitiveDatatype::INT);
+static PrimitiveDatatype farc_byte(PrimitiveDatatype::BYTE);
+static PrimitiveDatatype farc_char(PrimitiveDatatype::CHAR);
 //TODO add other primitive types here
 
 static inline MPI_Datatype datatype_handle_create() {
@@ -52,7 +54,7 @@ static inline void datatype_handle_free(MPI_Datatype* ddt_handle) {
     g_types_freelist.push(*ddt_handle);
 }
 
-static inline void datatype_store(MPI_Datatype dt_handle, FARC_Datatype *dt) {
+static inline void datatype_store(MPI_Datatype dt_handle, Datatype *dt) {
     if ((int)dt_handle < 50) {
         g_types[(int)dt_handle] = dt;
     }
@@ -61,7 +63,7 @@ static inline void datatype_store(MPI_Datatype dt_handle, FARC_Datatype *dt) {
     }
 }
 
-static inline FARC_Datatype* datatype_retrieve(MPI_Datatype dt_handle) {
+static inline Datatype* datatype_retrieve(MPI_Datatype dt_handle) {
     switch (dt_handle) {
         case MPI_DOUBLE:
             return &farc_double;
@@ -91,20 +93,20 @@ void interposer_init() {
         g_types_freelist.push(i);
     } 
 
-    FARC_DDT_Init();
+    DDT_Init();
 }
 
 void interposer_finalize() {
-    FARC_DDT_Finalize();
+    DDT_Finalize();
 }
 
 void interposer_hvector(int count, int blocklength, MPI_Aint stride, MPI_Datatype oldtype, MPI_Datatype *newtype) {
 
     *newtype = datatype_handle_create();
 
-    FARC_Datatype* oldtype_farc;
+    Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    FARC_Datatype* ddt = new FARC_HVectorDatatype(oldtype_farc, count, blocklength, stride);
+    Datatype* ddt = new HVectorDatatype(oldtype_farc, count, blocklength, stride);
     datatype_store(*newtype, ddt);
 }
 
@@ -112,9 +114,9 @@ void interposer_vector(int count, int blocklength, int stride, MPI_Datatype oldt
 
     *newtype = datatype_handle_create();
 
-    FARC_Datatype* oldtype_farc;
+    Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    FARC_Datatype* ddt = new FARC_VectorDatatype(oldtype_farc, count, blocklength, stride);
+    Datatype* ddt = new VectorDatatype(oldtype_farc, count, blocklength, stride);
     datatype_store(*newtype, ddt);
 }
 
@@ -122,11 +124,11 @@ void interposer_create_struct(int count, int array_of_blocklengths[], MPI_Aint a
 
     *newtype = datatype_handle_create();
 
-    FARC_Datatype** farc_oldtypes = (FARC_Datatype**) malloc(count * sizeof(FARC_Datatype*));
+    Datatype** farc_oldtypes = (Datatype**) malloc(count * sizeof(Datatype*));
     for (int i=0; i<count; i++) {
         farc_oldtypes[i] = datatype_retrieve(array_of_types[i]);
     }
-    FARC_Datatype* ddt = new FARC_StructDatatype(count, array_of_blocklengths, array_of_displacements, farc_oldtypes);
+    Datatype* ddt = new StructDatatype(count, array_of_blocklengths, array_of_displacements, farc_oldtypes);
     datatype_store(*newtype, ddt);
 }
 
@@ -134,11 +136,11 @@ void interposer_struct(int count, int *array_of_blocklengths, MPI_Aint *array_of
 
     *newtype = datatype_handle_create();
 
-    FARC_Datatype** farc_oldtypes = (FARC_Datatype**) malloc(count * sizeof(FARC_Datatype*));
+    Datatype** farc_oldtypes = (Datatype**) malloc(count * sizeof(Datatype*));
     for (int i=0; i<count; i++) {
         farc_oldtypes[i] = datatype_retrieve(array_of_types[i]);
     }
-    FARC_Datatype* ddt = new FARC_StructDatatype(count, array_of_blocklengths, array_of_displacements, farc_oldtypes);
+    Datatype* ddt = new StructDatatype(count, array_of_blocklengths, array_of_displacements, farc_oldtypes);
     free(farc_oldtypes);
     datatype_store(*newtype, ddt);
 }
@@ -147,9 +149,9 @@ void interposer_create_hvector(int count, int blocklength, MPI_Aint stride, MPI_
 
     *newtype = datatype_handle_create();
 
-    FARC_Datatype* oldtype_farc;
+    Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    FARC_Datatype* ddt = new FARC_HVectorDatatype(oldtype_farc, count, blocklength, stride);
+    Datatype* ddt = new HVectorDatatype(oldtype_farc, count, blocklength, stride);
     datatype_store(*newtype, ddt);
 }
 
@@ -157,9 +159,9 @@ void interposer_create_hindexed(int count, int array_of_blocklengths[], MPI_Aint
 
     *newtype = datatype_handle_create();
 
-    FARC_Datatype* oldtype_farc;
+    Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    FARC_Datatype* ddt = new FARC_HIndexedDatatype(count, array_of_blocklengths, array_of_displacements, oldtype_farc);
+    Datatype* ddt = new HIndexedDatatype(count, array_of_blocklengths, array_of_displacements, oldtype_farc);
     datatype_store(*newtype, ddt);
 }
 
@@ -167,9 +169,9 @@ void interposer_hindexed(int count, int array_of_blocklengths[], MPI_Aint array_
 
     *newtype = datatype_handle_create();
 
-    FARC_Datatype* oldtype_farc;
+    Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    FARC_Datatype* ddt = new FARC_HIndexedDatatype(count, array_of_blocklengths, array_of_displacements, oldtype_farc);
+    Datatype* ddt = new HIndexedDatatype(count, array_of_blocklengths, array_of_displacements, oldtype_farc);
     datatype_store(*newtype, ddt);
 }
 
@@ -177,18 +179,18 @@ void interposer_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtyp
 
     *newtype = datatype_handle_create();
 
-    FARC_Datatype* oldtype_farc;
+    Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    FARC_Datatype* ddt = new FARC_ContiguousDatatype(oldtype_farc, count);
+    Datatype* ddt = new ContiguousDatatype(oldtype_farc, count);
     datatype_store(*newtype, ddt);
 }
 
 void interposer_commit(MPI_Datatype *datatype) {
-    FARC_DDT_Commit(datatype_retrieve(*datatype));
+    DDT_Commit(datatype_retrieve(*datatype));
 }
 
 void interposer_free(MPI_Datatype *datatype) {
-    FARC_DDT_Free(datatype_retrieve(*datatype));
+    DDT_Free(datatype_retrieve(*datatype));
     datatype_handle_free(datatype);
 }
 
@@ -220,12 +222,12 @@ void interposer_buffer_free(void* tmpbuf) {
 
 void* interposer_pack(void *data, int count, MPI_Datatype datatype, int *buf_size) {
     void* buf = interposer_buffer_alloc(count, datatype, buf_size);
-    FARC_DDT_Pack(data, buf, datatype_retrieve(datatype), count);
+    DDT_Pack(data, buf, datatype_retrieve(datatype), count);
     return buf;
 }
 
 void interposer_unpack(void *data, int count, MPI_Datatype datatype, void* buf) {
-    FARC_DDT_Unpack(buf, data, datatype_retrieve(datatype), count);
+    DDT_Unpack(buf, data, datatype_retrieve(datatype), count);
 }
 
 void interposer_request_register(void *tmpbuf, void *usrbuf, int count, MPI_Datatype datatype, MPI_Request *request) {
@@ -240,7 +242,7 @@ void interposer_request_register(void *tmpbuf, void *usrbuf, int count, MPI_Data
     g_outstanding_requests.push_back(req);
 
     if (tmpbuf != NULL && is_recv(req)) {
-        FARC_DDT_Lazy_Unpack_Commit(datatype_retrieve(datatype));
+        DDT_Lazy_Unpack_Commit(datatype_retrieve(datatype));
     }
 }
 
@@ -251,7 +253,7 @@ void interposer_request_free(MPI_Request *request) {
             if (req->tmpbuf != NULL) {
                 // If it was a recv request then unpack it 
                 if (is_recv(*req)) {
-                    FARC_DDT_Unpack(req->tmpbuf, req->usrbuf, datatype_retrieve(req->datatype), req->count);
+                    DDT_Unpack(req->tmpbuf, req->usrbuf, datatype_retrieve(req->datatype), req->count);
                 }
                 interposer_buffer_free(req->tmpbuf);
             }
@@ -303,7 +305,7 @@ int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_
             std::map<MPI_Request, struct Request>::iterator it;
             it = g_my_recv_requests.find(oldrequests[i]);
             if (it != g_my_recv_requests.end()) {
-                FARC_DDT_Unpack(it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
+                DDT_Unpack(it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
                 g_my_recv_requests.erase(it);
             }
             interposer_buffer_free(g_my_buffers[oldrequests[i]]);
@@ -336,7 +338,7 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
             std::map<MPI_Request, struct Request>::iterator it;
             it = g_my_recv_requests.find(oldrequest);
             if (it != g_my_recv_requests.end()) {
-                FARC_DDT_Unpack(it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
+                DDT_Unpack(it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
                 g_my_recv_requests.erase(it);
             }
            
@@ -375,7 +377,7 @@ int MPI_Testall(int count, MPI_Request *array_of_requests, int *flag, MPI_Status
             std::map<MPI_Request, struct Request>::iterator it;
             it = g_my_recv_requests.find(oldrequests[i]);
             if (it != g_my_recv_requests.end()) {
-                FARC_DDT_Unpack( it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
+                DDT_Unpack( it->second.tmpbuf, it->second.usrbuf, datatype_retrieve(it->second.datatype), it->second.count);
                 g_my_recv_requests.erase(it);
             }
             interposer_buffer_free(g_my_buffers[oldrequests[i]]);
