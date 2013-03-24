@@ -18,6 +18,9 @@ run: all
 %: %.o ../ddt_jit.o
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
+../ddt_jit.o: ../ddt_jit.cpp ../ddt_jit.hpp
+	make -C ../ ddt_jit.o
+
 -include Makefile.deps
 
 clean:
