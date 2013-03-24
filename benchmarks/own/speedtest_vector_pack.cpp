@@ -45,8 +45,12 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
     HRT_TIMESTAMP_T start, stop;
     uint64_t mpi_type_create, pmpi_type_create, farc_type_create, mpi_pack, pmpi_pack, farc_pack, cpp_pack;
 
-    int data_size = sizeof(double)*inner_cnt * outer_cnt * blklen;
-    int buffer_size = sizeof(double)*((inner_cnt-1)*stride+blklen) * outer_cnt;
+    farc::Datatype* tmp1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
+    farc::Datatype* tmp2 = new farc::VectorDatatype(tmp1, inner_cnt, blklen, stride);
+    int data_size   = tmp2->getSize();
+    int buffer_size = tmp2->getExtent();
+    farc::DDT_Free(tmp1);
+    farc::DDT_Free(tmp2);
 
     init_in_and_out_buffer(buffer_size, &mpi_inbuf, &mpi_outbuf);
     init_in_and_out_buffer(buffer_size, &pmpi_inbuf, &pmpi_outbuf);
@@ -91,11 +95,9 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
             HRT_GET_TIMESTAMP(start);
             for (int i=0; i < outer_cnt; i++) {
                 for(int j=0; j < inner_cnt; j++) {
-                    cpp_outbuf[i*inner_cnt*5 + j*5    ] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5];
-                    cpp_outbuf[i*inner_cnt*5 + j*5 + 1] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5 + 1];
-                    cpp_outbuf[i*inner_cnt*5 + j*5 + 2] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5 + 2];
-                    cpp_outbuf[i*inner_cnt*5 + j*5 + 3] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5 + 3];
-                    cpp_outbuf[i*inner_cnt*5 + j*5 + 4] = cpp_inbuf[i*((inner_cnt-1)*stride + 5) + j*stride*5 + 4];
+                    for(int k=0; k < blklen; k++) {
+                        cpp_outbuf[i*inner_cnt*blklen + j*blklen + k] = cpp_inbuf[i*((inner_cnt-1)*stride + blklen) + j*stride + k];
+                    }
                 }
             }
             HRT_GET_TIMESTAMP(stop);
@@ -120,6 +122,7 @@ void benchmark_vector(int blklen, int stride, int inner_cnt, int outer_cnt, int 
 	  }
 	
 //    int res = compare_buffers(buffer_size, &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+//    int res = compare_buffers(buffer_size, &mpi_inbuf, ((char**)&cpp_inbuf), &mpi_outbuf, ((char**)&cpp_outbuf));
 //    test_result(res);
 
 	free_in_and_out_buffer(buffer_size, &mpi_inbuf, &mpi_outbuf);
