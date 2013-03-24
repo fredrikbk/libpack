@@ -1,0 +1,32 @@
+hvector(count=2, blocklen=1, stride=40)
+  hvector(count=64, blocklen=1, stride=16000)
+    vector(count=16, blocklen=5, stride=100)
+      double
+
+hvector(count=2, blocklen=1, stride=-40)
+  hvector(count=64, blocklen=1, stride=16000)
+    vector(count=16, blocklen=5, stride=100)
+      double
+
+hvector(count=2, blocklen=1, stride=800)
+  vector(count=64, blocklen=80, stride=2000)
+    double
+
+hvector(count=2, blocklen=1, stride=-800)
+  vector(count=64, blocklen=80, stride=2000)
+    double
+
+vector(count=16, blocklen=5, stride=100)
+  double
+
+hindexed(count=2)
+  (displ=0, blocklen=16)
+  (displ=9504, blocklen=16)
+    double
+
+hindexed(count=2)
+  (displ=0, blocklen=1)
+  (displ=9504, blocklen=1)
+    vector(count=18, blocklen=1, stride=18)
+      double
+

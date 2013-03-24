@@ -1,0 +1,124 @@
+[0] hvector(count=2, blocklen=1, stride=40)
+[2] hvector(count=2, blocklen=1, stride=40)
+[2]   hvector(count=64, blocklen=1, stride=51840)
+[2]     vector(count=32, blocklen=5, stride=180)
+[2]       double
+[0]   hvector(count=64, blocklen=1, stride=51840)
+[0]     vector(count=32, blocklen=5, stride=180)
+[0]       double
+[1] hvector(count=2, blocklen=1, stride=40)
+[1]   hvector(count=64, blocklen=1, stride=51840)
+[1]     vector(count=32, blocklen=5, stride=180)
+[1]       double
+[3] hvector(count=2, blocklen=1, stride=40)
+[3]   hvector(count=64, blocklen=1, stride=51840)
+[3]     vector(count=32, blocklen=5, stride=180)
+[3]       double
+[0] hvector(count=2, blocklen=1, stride=-40)
+[0]   hvector(count=64, blocklen=1, stride=51840)
+[0]     vector(count=32, blocklen=5, stride=180)
+[0]       double
+[1] hvector(count=2, blocklen=1, stride=-40)
+[1]   hvector(count=64, blocklen=1, stride=51840)
+[1]     vector(count=32, blocklen=5, stride=180)
+[1]       double
+[2] hvector(count=2, blocklen=1, stride=-40)
+[2]   hvector(count=64, blocklen=1, stride=51840)
+[2]     vector(count=32, blocklen=5, stride=180)
+[2]       double
+[3] hvector(count=2, blocklen=1, stride=-40)
+[3]   hvector(count=64, blocklen=1, stride=51840)
+[3]     vector(count=32, blocklen=5, stride=180)
+[3]       double
+[1] hvector(count=2, blocklen=1, stride=1440)
+[1]   vector(count=64, blocklen=160, stride=6480)
+[1]     double
+[0] hvector(count=2, blocklen=1, stride=1440)
+[0]   vector(count=64, blocklen=160, stride=6480)
+[0]     double
+[2] hvector(count=2, blocklen=1, stride=1440)
+[2]   vector(count=64, blocklen=160, stride=6480)
+[2]     double
+[3] hvector(count=2, blocklen=1, stride=1440)
+[3]   vector(count=64, blocklen=160, stride=6480)
+[3]     double
+[0] hvector(count=2, blocklen=1, stride=-1440)
+[1] hvector(count=2, blocklen=1, stride=-1440)
+[1]   vector(count=64, blocklen=160, stride=6480)
+[1]     double
+[0]   vector(count=64, blocklen=160, stride=6480)
+[0]     double
+[2] hvector(count=2, blocklen=1, stride=-1440)
+[2]   vector(count=64, blocklen=160, stride=6480)
+[2]     double
+[3] hvector(count=2, blocklen=1, stride=-1440)
+[3]   vector(count=64, blocklen=160, stride=6480)
+[3]     double
+[1] vector(count=31, blocklen=5, stride=180)
+[3] vector(count=31, blocklen=5, stride=180)
+[3]   double
+[1]   double
+[0] vector(count=31, blocklen=5, stride=180)
+[0]   double
+[2] vector(count=31, blocklen=5, stride=180)
+[2]   double
+[0] vector(count=31, blocklen=5, stride=180)
+[0]   double
+[2] vector(count=31, blocklen=5, stride=180)
+[2]   double
+[3] vector(count=31, blocklen=5, stride=180)
+[3]   double
+[1] vector(count=31, blocklen=5, stride=180)
+[1]   double
+[0] hindexed(count=2)
+[1] hindexed(count=2)
+[1]   (displ=0, blocklen=32)
+[1]   (displ=17952, blocklen=32)
+[1]     double
+[2] hindexed(count=2)
+[2]   (displ=0, blocklen=32)
+[2]   (displ=17952, blocklen=32)
+[2]     double
+[3] hindexed(count=2)
+[3]   (displ=0, blocklen=32)
+[3]   (displ=17952, blocklen=32)
+[3]     double
+[0]   (displ=0, blocklen=32)
+[0]   (displ=17952, blocklen=32)
+[0]     double
+[0] hindexed(count=2)
+[0]   (displ=0, blocklen=1)
+[0]   (displ=17952, blocklen=1)
+[0]     vector(count=34, blocklen=1, stride=34)
+[0]       double
+[1] hindexed(count=2)
+[1]   (displ=0, blocklen=1)
+[1]   (displ=17952, blocklen=1)
+[1]     vector(count=34, blocklen=1, stride=34)
+[1]       double
+[2] hindexed(count=2)
+[3] hindexed(count=2)
+[3]   (displ=0, blocklen=1)
+[3]   (displ=17952, blocklen=1)
+[3]     vector(count=34, blocklen=1, stride=34)
+[3]       double
+[2]   (displ=0, blocklen=1)
+[2]   (displ=17952, blocklen=1)
+[2]     vector(count=34, blocklen=1, stride=34)
+[2]       double
+[0] vector(count=64, blocklen=1, stride=34)
+[0]   double
+[1] vector(count=64, blocklen=1, stride=34)
+[1]   double
+[2] vector(count=64, blocklen=1, stride=34)
+[3] vector(count=64, blocklen=1, stride=34)
+[3]   double
+[2]   double
+[0] vector(count=64, blocklen=1, stride=34)
+[1] vector(count=64, blocklen=1, stride=34)
+[1]   double
+[2] vector(count=64, blocklen=1, stride=34)
+[2]   double
+[3] vector(count=64, blocklen=1, stride=34)
+[3]   double
+[0]   double

@@ -1,0 +1,20 @@
+hvector(count=2, blocklen=1, stride=40)
+  hvector(count=102, blocklen=1, stride=7480)
+    vector(count=13, blocklen=5, stride=55)
+      double
+
+hvector(count=2, blocklen=1, stride=-40)
+  hvector(count=102, blocklen=1, stride=7480)
+    vector(count=13, blocklen=5, stride=55)
+      double
+
+hvector(count=2, blocklen=1, stride=440)
+  vector(count=102, blocklen=30, stride=935)
+    double
+
+hvector(count=2, blocklen=1, stride=-440)
+  vector(count=102, blocklen=30, stride=935)
+    double
+
+vector(count=13, blocklen=5, stride=55)
+  double
