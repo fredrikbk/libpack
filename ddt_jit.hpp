@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <vector>
+#include <string>
 
 #define LAZY 0 
 #define TIME 0 
@@ -27,7 +28,7 @@ class FARC_Datatype {
     virtual void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     virtual int getExtend() = 0;
     virtual int getSize() = 0;
-    virtual void print(int indent) = 0;
+    virtual void print(std::string indent) = 0;
 
     void (*packer)(void*, int, void*);
     void (*unpacker)(void*, int, void*);
@@ -52,7 +53,7 @@ class FARC_PrimitiveDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
-    void print(int indent);
+    void print(std::string indent);
 
 };
 
@@ -69,7 +70,7 @@ class FARC_ContiguousDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
-    void print(int indent);
+    void print(std::string indent);
 
 };
 
@@ -87,7 +88,7 @@ class FARC_VectorDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
-    void print(int indent);
+    void print(std::string indent);
 
 };
 
@@ -105,7 +106,7 @@ class FARC_HVectorDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
-    void print(int indent);
+    void print(std::string indent);
 
 };
 
@@ -124,7 +125,7 @@ class FARC_IndexedBlockDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
-    void print(int indent);
+    void print(std::string indent);
 
 };
 
@@ -143,7 +144,7 @@ class FARC_HIndexedDatatype : public FARC_Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtend();
     int getSize();
-    void print(int indent);
+    void print(std::string indent);
 
 };
 
@@ -162,7 +163,7 @@ class FARC_StructDatatype : public FARC_Datatype {
     void Codegen(llvm::Value *compactbuf, llvm::Value *scatteredbuf, llvm::Value* incount, bool pack);
     int getExtend();
     int getSize();
-    void print(int indent);
+    void print(std::string indent);
 
 };
 
