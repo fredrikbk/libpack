@@ -46,8 +46,8 @@ int FARC_Commit(FARC_Datatype *ddt);
 int FARC_Commit_pack(FARC_Datatype *ddt);
 int FARC_Commit_unpack(FARC_Datatype *ddt);
 
-int FARC_Pack(void* inbuf, void* outbuf, FARC_Datatype type, int count);
-int FARC_Unpack(void* inbuf, void* outbuf, FARC_Datatype type, int count);
+int FARC_Pack(void* inbuf, int incount, FARC_Datatype intype, void* outbuf);
+int FARC_Unpack(void* inbuf, void* outbuf, int outcount, FARC_Datatype outtype);
 
 int FARC_Get_extent(FARC_Datatype datatype, FARC_Aint *lb, FARC_Aint *extent);
 int FARC_Get_size(FARC_Datatype datatype, int *size);
