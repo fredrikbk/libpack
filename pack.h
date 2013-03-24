@@ -6,25 +6,25 @@ extern "C" {
 #endif
 
 typedef void* FARC_Datatype;
-typedef int   FARC_Primitive;
+typedef int   FARC_Primitivetype;
 
-FARC_Datatype FARC_CHAR; 
-FARC_Datatype FARC_SIGNED_CHAR;
-FARC_Datatype FARC_UNSIGNED_CHAR;
-FARC_Datatype FARC_BYTE;
-FARC_Datatype FARC_WCHAR;
-FARC_Datatype FARC_SHORT;
-FARC_Datatype FARC_UNSIGNED_SHORT;
-FARC_Datatype FARC_INT;
-FARC_Datatype FARC_UNSIGNED;
-FARC_Datatype FARC_LONG;
-FARC_Datatype FARC_UNSIGNED_LONG;
-FARC_Datatype FARC_FLOAT;
-FARC_Datatype FARC_DOUBLE;
-FARC_Datatype FARC_LONG_DOUBLE;
-FARC_Datatype FARC_LONG_LONG_INT;
-FARC_Datatype FARC_UNSIGNED_LONG_LONG;
-FARC_Datatype FARC_LONG_LONG;
+#define FARC_CHAR                0 
+#define FARC_SIGNED_CHAR         1
+#define FARC_UNSIGNED_CHAR       2
+#define FARC_BYTE                3
+#define FARC_WCHAR               4
+#define FARC_SHORT               5
+#define FARC_UNSIGNED_SHORT      6
+#define FARC_INT                 7
+#define FARC_UNSIGNED            8
+#define FARC_LONG                9
+#define FARC_UNSIGNED_LONG      10
+#define FARC_FLOAT              11
+#define FARC_DOUBLE             12
+#define FARC_LONG_DOUBLE        13
+#define FARC_LONG_LONG_INT      14
+#define FARC_UNSIGNED_LONG_LONG 15
+#define FARC_LONG_LONG          16
 
 typedef long FARC_Aint;
 
@@ -33,7 +33,8 @@ typedef long FARC_Aint;
 int FARC_Init();
 int FARC_Finalize();
 
-int FARC_Contiguous(int count, FARC_Datatype old_type, FARC_Datatype *newtype_p);
+int FARC_Primitive(FARC_Primitivetype primitivetype, FARC_Datatype *newtype_p);
+int FARC_Contiguous(int count, FARC_Datatype oldtype, FARC_Datatype *newtype_p);
 int FARC_Vector(int count, int blocklen, int stride, FARC_Datatype oldtype, FARC_Datatype *newtype_p);
 int FARC_Hvector(int count, int blocklen, FARC_Aint stride, FARC_Datatype oldtype, FARC_Datatype *newtype_p);
 int FARC_Indexed_block(int count, int blocklen, int displacements[], FARC_Datatype oldtype, FARC_Datatype *newtype_p);
