@@ -12,6 +12,8 @@
 #define LLVM_OUTPUT    0 
 #define LLVM_OPTIMIZE  0 
 
+#define VECTOR_UNROLL  0 
+
 /* Forward declare llvm values */
 namespace llvm {
     class Value;
@@ -52,7 +54,7 @@ class PrimitiveDatatype : public Datatype {
 
     public:
     PrimitiveDatatype(PrimitiveType type);
-    ~PrimitiveDatatype(void);
+    ~PrimitiveDatatype(void) {};
     void Codegen_Pack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
