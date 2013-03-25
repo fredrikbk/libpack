@@ -1,10 +1,11 @@
 CXX=g++
+
 FARCDIR=../../..
 
 FARCLIBS=$(shell llvm-config --libs all)
 FARCLDFLAGS=$(shell llvm-config --ldflags)
 
-CPPFLAGS= -O3 -march=core-avx-i -I/usr/include/mpi -I$(FARCDIR) $(shell llvm-config --cppflags)
+CPPFLAGS= -O3 -march=core-avx-i -I/usr/include/mpi -I$(FARCDIR) $(shell llvm-config --cppflags) -DNUM=$(NUM)
 
 .SUFFIXES:
 .PRECIOUS: %.s %.o %.ll

@@ -1,4 +1,3 @@
-#define NUM    8 * 1024 * 1024 
 #define TYPE   double
 #define ALIGN  1
 #include "../stage.h"
@@ -13,4 +12,3 @@ void copy(void *out, void *in, int num, long size) {
         _mm256_storeu_pd(&dout[i], ymm1);
     }
 }
-

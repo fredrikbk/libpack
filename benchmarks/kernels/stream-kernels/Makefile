@@ -1,3 +1,4 @@
+NUM?=256
 TESTS=$(shell ls *.cpp | sed -e 's/.cpp$$//g';)
 
 all: $(TESTS)
