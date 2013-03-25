@@ -375,8 +375,50 @@ PrimitiveDatatype* PrimitiveDatatype::Clone() {
     return t_new;
 }
 
+#define PRIMITIVE_MEMCPY_CUTOFF 32
 void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+    // Three cases:
+    // 1. The value of count is not known to us (supplied at pack/unpack time)
+    //    This case is not very important.  We should just call memcpy.
+    // 2. The value of count is known and a large number (larger than PRIMITIVE_MEMCPY_CUTOFF)
+    // 3. The value of count is known and a small number (smaller than PRIMTIVE_MEMCPY_CUTOFF)
+    //
+    // We don't know what to do for case 2 and 3.  We also don't know wheter we should only
+    // consider two cases for known counts, or whether there are three or even four ranges
+    // that should use different strategies.
+    //
+    // Promising options for known count values include:
+    // a. Call memcpy and hope llvm checks whether count is a constant and lowers it to
+    //    good code for us
+    // b. Generate vector code with unaligned loads and aligned stores, with a preamble to
+    //    copy data until the out ptr is aligned.  We should only operate on vectors that
+    //    are smallish a pow-of-two (8 or 16 elements)
+    // c. Generate unaligned load/store vector code (b, but with unaligned stores and no 
+    //    preamble)
+    // d. Generate aligned vector code with streaming stores (b, stores using the nontemporal 
+    //    hint)
+    // e. Generate code that compiles to "rep mov"-like instructions, where mov may be a 
+    //    memory to memory mov instruction.
+    //
+    // What should PRIMITIVE_MEMCPY_CUTOFF be?  What value generalizes well?  Do we even need 
+    // generate different llvm IR for these two ranges?  Should there be more than two ranges?
+    //
+    // I suspect inlined b might work well for smallish counts (<=32 elements).  For very
+    // small counts c might be better since it doesn't require the preamble.  For large counts
+    // a, d and e are top contenders.  e has a large warmup count.  d should allow a higher bw 
+    // because it doesn't require store memory locations to be loaded into the cache.  Intel
+    // recommends considering it if the amount of copied data is larger than half the size of
+    // the last level cache and/or the stored data won't be used by the CPU for a while.  This
+    // option is very interesting since it doesn't flush client code's cached values.  However,
+    // I assume that the NIC reads the values directly from memory, and not through the cache.
+    // e apparantly has a high warmup cost, but some sources say it should be pretty good for
+    // large memcopies.  However, some sources say not all processors implement it well.
+    // 
+    // Note that all of the above (except from using memcpy for case 1) are UNTESTED 
+    // ASSUMPTIONS.  Don't implement any of this without first testing it.
+
     llvm::ConstantInt* incount_ci = dyn_cast<llvm::ConstantInt>(incount);
+    // Case 3
     if (incount_ci != NULL) {
         llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
         
@@ -389,6 +431,7 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
         Value* bytes = Builder.CreateAlignedLoad(in_vec, 1, "bytes");
         Builder.CreateAlignedStore(bytes, out_vec, 1);
     }
+    // Case 1 and 2
     else {
         Value* contig_extend = multNode(this->getSize(), incount);
         Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
