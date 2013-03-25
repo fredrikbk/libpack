@@ -39,6 +39,7 @@ static std::queue<int> g_types_freelist;
 static std::map<MPI_Datatype, Datatype*> g_types_fallback;
 
 static PrimitiveDatatype farc_double(PrimitiveDatatype::DOUBLE);
+static PrimitiveDatatype farc_float(PrimitiveDatatype::FLOAT);
 static PrimitiveDatatype farc_int(PrimitiveDatatype::INT);
 static PrimitiveDatatype farc_byte(PrimitiveDatatype::BYTE);
 static PrimitiveDatatype farc_char(PrimitiveDatatype::CHAR);
@@ -64,6 +65,7 @@ static inline void datatype_store(MPI_Datatype dt_handle, Datatype *dt) {
 }
 
 static inline Datatype* datatype_retrieve(MPI_Datatype dt_handle) {
+
     switch (dt_handle) {
         case MPI_DOUBLE:
             return &farc_double;
@@ -76,6 +78,9 @@ static inline Datatype* datatype_retrieve(MPI_Datatype dt_handle) {
             break;
         case MPI_CHAR:
             return &farc_char;
+            break;
+        case MPI_FLOAT:
+            return &farc_float;
             break;
     }
 
@@ -175,6 +180,17 @@ void interposer_hindexed(int count, int array_of_blocklengths[], MPI_Aint array_
     datatype_store(*newtype, ddt);
 }
 
+void interposer_indexed_block(int count, int blocklength, int array_of_displacements[], MPI_Datatype oldtype, MPI_Datatype *newtype) {
+
+    *newtype = datatype_handle_create();
+
+    Datatype* oldtype_farc;
+    oldtype_farc = datatype_retrieve(oldtype);
+    Datatype* ddt = new IndexedBlockDatatype(count, blocklength, array_of_displacements, oldtype_farc);
+    datatype_store(*newtype, ddt);
+    
+}
+
 void interposer_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype) {
 
     *newtype = datatype_handle_create();
@@ -193,6 +209,15 @@ void interposer_free(MPI_Datatype *datatype) {
     DDT_Free(datatype_retrieve(*datatype));
     datatype_handle_free(datatype);
 }
+
+int interposer_type_size(MPI_Datatype datatype) {
+    return datatype_retrieve(datatype)->getSize();
+}
+
+int interposer_type_extent(MPI_Datatype datatype) {
+    return datatype_retrieve(datatype)->getExtent();
+}
+
 
 // TODO: Implement segmenting (and possibly reduce buffer size)
 const int scratch_size = 2 * 1024 * 1024;

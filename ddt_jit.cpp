@@ -4,11 +4,13 @@
 #include <map>
 #include <cstdio>
 
-#if defined(LLVM_VERSION_MINOR) && LLVM_VERSION_MINOR < 3
-#define LLVM32 1
-#else
-#define LLVM32 2
-#endif
+//#if defined(LLVM_VERSION_MINOR) && LLVM_VERSION_MINOR < 3
+//#define LLVM32 1
+//#else
+//#define LLVM32 2
+//#endif
+
+#define LLVM32 0
 
 #if LLVM32
 #include "llvm/Module.h"
@@ -359,6 +361,7 @@ PrimitiveDatatype::PrimitiveDatatype(PrimitiveDatatype::PrimitiveType type) : Da
     if (Type == BYTE)   this->Extent = 1;
     if (Type == CHAR)   this->Extent = 1;
     if (Type == DOUBLE) this->Extent = sizeof(double);
+    if (Type == FLOAT)  this->Extent = sizeof(float);
     if (Type == INT)    this->Extent = sizeof(int);
     //TODO add more. Remember to also add them to the print function.
 
@@ -416,6 +419,9 @@ void PrimitiveDatatype::print(std::string indent) {
         break;
     case DOUBLE:
         fprintf(stderr, "%sdouble\n", indent.c_str());
+        break;
+    case FLOAT:
+        fprintf(stderr, "%sfloat\n", indent.c_str());
         break;
     case INT:
         fprintf(stderr, "%sint\n", indent.c_str());

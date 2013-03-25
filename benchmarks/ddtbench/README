@@ -1,0 +1,203 @@
+# README file for DDTBench datatype benchmark 
+
+This benchmark implements data access patterns from a wide range of
+applications (WRF, MILC, NAS LU/MG, FFT, SPECFEM3D_GLOBE and LAMMPS). Each of
+the micro-apps performs several tests whose parameters are derived from real
+application runs and input files. Please refer to Schneider, Gerstenberger,
+Hoefler: "Micro-Applications for Communication Data Access Patterns and MPI
+Datatypes" for details!
+
+This benchmark was written by Robert Gerstenberger, Timo Schneider and
+Torsten Hoefler and is copyrighted by the Trustees of the University 
+of Illinois (c) 2012. See LICENSE for details on the license.
+
+Building
+--------
+  
+Currently this benchmark is implemented in Fortran as well as in C.
+
+  * Edit Makefile.inc to set FC, CC, FCFLAGS, etc.
+    * Choose the right parameter for HRT_ARCH according to your
+      hardware to use high resolution timer instead of MPI_Wtime.
+    * Choose your measurement mode (time, papi, time+papi).
+  * build: make
+  * run: mpiexec -n 32 ./ddtbench_{c,f90}
+
+  * The ddtbench binaries comes with a small command line interface,
+    which in the fortran case is implemented by using Fortran 2003
+    features (command_argument_count, get_command_argument). If one
+    of those breaks your build, please comment out lines 59 to 95 in
+    file src_f90/ddtbench.F90 .
+  * The Makefile also offers a test option
+    (make test NPROCS=n OUTER=n INNER=n): this fetches the sources of
+	  the stable and unstable version of Open MPI and MPICH2, builds
+	  them and then runs a test with each of the MPI versions for both
+	  ddtbench versions. The benchmark will be executed with NPROCS
+	  processes with OUTER number of outer loops and INNER number of
+	  inner loops. If you don't specify one or all of the parameters,
+    the defaults mentioned in test.inc will be used.
+
+Output
+------
+
+  * The output file is named ddtbench.out.
+  * the output file has 9 columns (testname, method, number of bytes sent,
+    epoch name, time, name of first papi event, count of first papi event,
+    name of second papi event, count of second papi event).
+  * The four methods are:
+    * mpi_ddt: benchmark using MPI DDTs
+    * manual: benchmark using the original pack routines from the
+      applications
+    * mpi_pack_ddt: benchmark using MPI_Pack/MPI_Unpack with MPI DDTs
+    * reference: benchmark that does a traditional ping-pong of the
+      same datasize
+  * The five epoch names are: ddt_create_overhead, pack, communication,
+    unpack and ddt_free_overhead. If one epoch isn't used in one test,
+    this epoch will be printed at the end of this test with a time of
+    zero, so that all epochs are present for each test.
+
+Running
+-------
+
+ * command line interface: ddtbench_{c,f90} <outer_loop> <inner_loop>
+   if no or not all parameter are provided the following defaults are used:
+   * outer_loop = 10
+   * inner_loop = 20
+ * The ddtbench binaries runs several different tests (16 all together), 
+   where each test has several runs for different input sizes.
+ * Nearly all the tests are running as a ping-pong, except for the FFT
+   test, which performs a Alltoall instead of a simple Send/Recv. The
+   process is nearly the same as in the ping-pong case:
+   (1) All processes build the datatypes/allocate the buffers [outer loop].
+   (2) All processes pack the data (implicit with MPI DDTs) [inner loop].
+   (3) All processes perform the Alltoall, unpack the data (implicit
+       with MPI DDTs), pack the data (implicit with MPI DDTs) and
+       perform another Alltoall [inner loop].
+   (4) All processes unpack the data (implicit with MPI DDTs) [inner loop].
+   (5) All processes free the datatypes/buffer [outer loop].
+   Only rank 0 measures the time.
+ * One should at least run the benchmark with 2 processes.
+ * If you like to run measurements with PAPI, the PAPI events are chosen
+   over the environmental variables PAPI_EVT1 and PAPI_EVT2. One can run
+   the benchmark with counting one or two events.
+
+Input Parameter/Datatype
+------------------------
+
+  * General: The subparts of different arrays are packed together with
+    MPI_Type_create_struct with the address of each array in comparison
+    to MPI_BOTTOM as displacement. Those addresses can be obtained by a
+    call to MPI_Get_address.
+  * WRF: WRF exchanges, in so called halo/period functions (about 30 to
+    40), faces of several arrays. Those arrays and their subarrays
+    can be two, three or four dimensional.
+    Those are faces are exemplary implemented with different MPI
+    datatypes. For the WRF_{x,y}_sa case MPI_Type_create_subarray is 
+    used and in the WRF_{x,y}_vec case nested MPI_vectors are used,
+    which in the following part are listed in detail:
+    2D: MPI_Type_vector
+    3D: MPI_Type_hvector of MPI_Type_vector
+    4D: MPI_Type_hvector of MPI_Type_hvector of MPI_Type_vector
+    The faces of different arrays are packed together as described
+    above.
+    The x and y denotes the communication in x and y direction of the
+    processor grid. The datatype are built in the same way, but with
+    different input parameters.
+    The input parameter for the array boundaries were extracted from
+    runs of the em_b_wave ideal case with different numbers of
+    processes (4, 9, 16, 25, 64). The number of arrays is static
+    (4x 2Ds, 3x 3Ds and 2x 4Ds) and is exemplary for those halo
+    functions.
+  * MILC: MILC represents space time with a four dimensional grid
+    (Lx * Ly * Lz * Lt), decomposed with checkerboarding. It
+    exchanges gluons from various positions. The datatype for the
+    ZDOWN direction is build in the following way:
+    (1) The base type is a contiguous type of six floats (c case) or
+        3 complex (fortran case).
+    (2) The next datatype is a vector type of the above mentioned
+        contiguous type with Lt blocks, each block contains Lx *
+        Ly/2 elements and a stride of Lx * Ly * Lz/2.
+    (3) The final datatype is a hvector type with 2 blocks of the
+        above mentioned vector type. The stride depends from the
+        model used, which defines among other things the distance
+        between odd and even elements. For the test the hypercubic
+        model was chosen, in which the stride is Lx * Ly * Lz * Lt/2.
+    The input parameter were obtained by running MILC with 1024
+    processes with different grid sizes (from 64x64x32x32 to
+    128x128x64x64).
+  * NAS MG: The NAS MG benchmark performs a face exchange in each
+    direction of a cube (3D array). Each direction (x,y,z) was modeled
+    since each surface needs a different MPI DDT and performs
+    differently.
+    x (yz surface): a hvector of vector with stride between every
+                    element of the surface
+    y (xz surface): a vector with a stride after each line in the
+                    x dimension
+    z (xy surface): a vector with a stride after each line in the
+                    x dimension, the stride is much smaller than in the
+                    y direction
+    The input parameter were obtained by running classes S,W,A,C with
+    4 processes.
+  * NAS LU: The NAS LU benchmark performs a 1D face exchange in x and y
+    direction from a 2D array. Each surface needs a different datatype
+    and also performs differently. Each grid point consists of 5
+    doubles.
+    x : a contiguous type
+    y : A vector type with a stride between each grid point, which is
+        modeled as contiguous type.
+    The grid sizes of the classes S,W,A-E were directly taken as input
+    parameters for the array size on each node.
+  * FFT: This test performs with an Alltoall a transpose of a
+    distributed matrix with interleaved vector types (different on
+    sender and receiver side). For further details see below mentioned
+    reference.
+  * SPECFEM3D_mt: The SPECFEM3D_GLOBE performs the assembly of a
+    distributed matrix in conjunction with a transpose of that matrix.
+    To go along with the ping-pong scheme the sender assembles a xz
+    plane using MPI DDTs (a vector type), and the receiver stores it as
+    a xy plane and don't use datatypes since the data is already
+    contiguous.
+    The input parameter were obtained by running SPECFEM3D GLOBE with
+    600 processes (10x10x6) with a constant c of 1,2,3 and 4, which
+    is equal to nproc_eta = nproc_xi = 80,160,240 and 320.
+  * LAMMPS: LAMMPS exchanges particles with different properties. There
+    is an array for each property, where all the information for every
+    particle is stored. A list stores the position of all the particles
+    to send. This list is modeled as an indexed type, in particular as
+    an indexed_block, since all the blocks of one property have the same
+    size. Because blocklengths of those properties differs from each
+    other, there is more than one indexed type used. To assemble the
+    different arrays a struct type is used. On the receiver side the
+    properties are stored at the end of each array with a different MPI
+    DDT.
+    sender side: struct of several indexed_block
+    recevier side: struct of several contiguous
+    In the full case all of the six properties are present, while in
+    the atomic case only four are used.
+    The input parameter for the full case were extracted from running
+    the peptide example with 2, 4 and 8 processes. For the atomic case
+    the crack example with 2, 4 and 8 processes was used.
+  * SPECFEM3D: SPECFEM3D exchanges the acceleration data of grid points.
+    Different layers of the earth have different relevant directions:
+    * oc( outer core): one
+    * cm( crust mantle/inner core): three
+    Only some grid points need to be exchanged (which is determinated
+    by the mesher). This is modeled as an indexed_block. Since in the
+    cm case the acceleration data of two different layers (crust
+    mantle and inner core) is exchanged, we use a struct type on top
+    of the indexed types. The lists for the crust mantle and the inner
+    core are different and so are the indexed types.
+    The input parameters for this benchmarks were obtained in the same
+    way as the SPECFEM3D_mt benchmark.
+
+Citation
+--------
+
+Any published work which uses this software should include the following
+citation:
+
+----------------------------------------------------------------------
+T. Schneider, R. Gerstenberger and T. Hoefler: Micro-Applications for 
+Communication Data Access Patterns and MPI Datatypes. In Recent
+Advances in the Message Passing Interface (EuroMPI'12)
+----------------------------------------------------------------------

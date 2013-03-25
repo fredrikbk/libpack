@@ -5,7 +5,7 @@ LDLIBS=$(shell llvm-config --libs all)
 LDFLAGS=$(shell llvm-config --ldflags)
 CFLAGS=$(shell llvm-config --cppflags) -O3 -g3
 
-#farc: libfarc.a libfarcinterposer.a
+farc: libfarcinterposer.a
 
 farc: ddt_jit.o interposer.o interposerf.o interposer_common.o
 
@@ -16,8 +16,8 @@ test: farc
 #libfarc.a: ddt_jit.o
 #	ar rcs libfarc.a $^
 
-#libfarcinterposer.a: interposer.o interposer_common.o ddt_jit.o
-#	ar rcs libfarcinterposer.a $^
+libfarcinterposer.a: interposer.o interposer_common.o ddt_jit.o
+	ar rcs libfarcinterposer.a $^
 
 interposer.o: interposer.c interposer_common.h
 	$(CXX) -DHRT_ARCH=2 -c $< -o $@

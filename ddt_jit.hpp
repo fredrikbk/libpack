@@ -45,7 +45,7 @@ class Datatype {
 /* Class for primitive types, such as MPI_INT, MPI_BYTE, etc */
 class PrimitiveDatatype : public Datatype {
     public:
-    enum PrimitiveType { BYTE, CHAR, DOUBLE, INT };   
+    enum PrimitiveType { BYTE, CHAR, DOUBLE, FLOAT, INT };   
 
     private:
     PrimitiveDatatype::PrimitiveType Type;
