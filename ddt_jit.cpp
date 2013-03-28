@@ -420,20 +420,113 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
     llvm::ConstantInt* incount_ci = dyn_cast<llvm::ConstantInt>(incount);
     // Case 3
     if (incount_ci != NULL) {
-        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
-        
+#define PACKVAR 6
+#if PACKVAR == 1        
         // Bitcast instructions that make it easier to interface with the outside code.
         // Note that these don't result in any assembly instructions
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
         Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
         Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
 
         // Load and store
         Value* bytes = Builder.CreateAlignedLoad(in_vec, 1, "bytes");
         Builder.CreateAlignedStore(bytes, out_vec, 1);
+#elif PACKVAR == 2       
+        // Bitcast instructions that make it easier to interface with the outside code.
+        // Note that these don't result in any assembly instructions
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
+        Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
+        Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
+
+        // Load and store
+        Value* bytes = Builder.CreateAlignedLoad(in_vec, 16, "bytes");
+        Builder.CreateAlignedStore(bytes, out_vec, 16);
+#elif PACKVAR == 3
+        // Bitcast instructions that make it easier to interface with the outside code.
+        // Note that these don't result in any assembly instructions
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
+        Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
+        Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
+
+        // Load and store
+		MDNode *Node = MDNode::get(getGlobalContext(), Builder.getInt32(1));
+        Value* bytes = Builder.CreateAlignedLoad(in_vec, 16, "bytes");
+        StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 16);
+		store->setMetadata(TheModule->getMDKindID("nontemporal"), Node); // why the hell do i have to supply 1 here llvm?
+#elif PACKVAR == 4
+		int size_to_pack = this->getSize() * incount_ci->getSExtValue();
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getDoubleTy(getGlobalContext()), 2));
+
+		while (size_to_pack > 0) {
+		
+			MDNode *Node = MDNode::get(getGlobalContext(), Builder.getInt32(1));
+			Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
+			Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
+			Value* bytes = Builder.CreateAlignedLoad(in_vec, 16, "bytes");
+			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 16);
+			store->setMetadata(TheModule->getMDKindID("nontemporal"), Node); // why the hell do i have to supply 1 here llvm?
+
+    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(16));
+    		outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+
+    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(16));
+    		inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+			
+			size_to_pack -= 16;
+		}
+
+		// revert changes to inbuf, outbuf
+    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    	Value* out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(-size_to_pack));
+    	outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+
+    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    	Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(-size_to_pack));
+    	inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+#elif PACKVAR == 5
+		int size_to_pack = this->getSize() * incount_ci->getSExtValue();
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getDoubleTy(getGlobalContext()), 2));
+
+		while (size_to_pack > 0) {
+		
+			MDNode *Node = MDNode::get(getGlobalContext(), Builder.getInt32(1));
+			Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
+			Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
+			Value* bytes = Builder.CreateAlignedLoad(in_vec, 16, "bytes");
+			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 16);
+
+    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(16));
+    		outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+
+    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(16));
+    		inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+			
+			size_to_pack -= 16;
+		}
+
+		// revert changes to inbuf, outbuf
+    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    	Value* out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(-size_to_pack));
+    	outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+
+    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    	Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(-size_to_pack));
+    	inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+#elif PACKVAR == 6
+		Value* contig_extend = multNode(this->getSize(), incount);
+        Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
+#else
+#error NO PACKVAR DEFINED
+#endif
+
     }
     // Case 1 and 2
     else {
-        Value* contig_extend = multNode(this->getSize(), incount);
+		Value* contig_extend = multNode(this->getSize(), incount);
         Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
     }
 

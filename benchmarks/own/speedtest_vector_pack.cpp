@@ -12,8 +12,8 @@ unsigned long long g_timerfreq;
 
 void init_in_and_out_buffer(size_t buffer_size, char** inbuf, char** outbuf) {
 
-	*inbuf = (char*) malloc(buffer_size);
-    *outbuf = (char*) malloc(buffer_size);
+	posix_memalign(reinterpret_cast<void**>(inbuf), 16, buffer_size);
+    posix_memalign(reinterpret_cast<void**>(outbuf), 16, buffer_size);
 
 	assert(inbuf != NULL);
 	assert(outbuf != NULL);

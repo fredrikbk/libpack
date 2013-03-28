@@ -1,9 +1,9 @@
 CXX=mpic++
 F77=mpif77
 
-LDLIBS=$(shell llvm-config --libs all)
-LDFLAGS=$(shell llvm-config --ldflags)
-CFLAGS=$(shell llvm-config --cppflags) -O3 -g3
+LDLIBS+=$(shell llvm-config --libs all)
+LDFLAGS+=$(shell llvm-config --ldflags)
+CFLAGS+=$(shell llvm-config --cppflags) -O3 -g3
 
 farc: libfarcinterposer.a
 
