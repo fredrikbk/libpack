@@ -80,6 +80,16 @@ FunctionType *FT;
 #define INT64    Type::getInt64Ty(getGlobalContext())
 #define INT8PTR  Type::getInt8PtrTy(getGlobalContext())
 
+/** for debugging **   
+std::vector<llvm::Type*> printf_arg_types;
+printf_arg_types.push_back(INT8PTR);
+FunctionType* printf_type = FunctionType::get(INT32, printf_arg_types, true);
+Function *func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
+Value *fmt_ptr = Builder.CreateGlobalStringPtr("stride to add: %i\n\0");
+Value *fmt_ptr2 = Builder.CreateGlobalStringPtr("restore stride\n\0");
+// now we can print as follows:
+//llvm::CallInst *call = builder.CreateCall2(func, fmt_ptr, ValueToPrint);
+*/
 
 /* Codegen Functions */
 static Value* multNode(int op1, Value* op2PtrNode) {
@@ -96,262 +106,248 @@ static inline Value* constNode(long val) {
     return ConstantInt::get(getGlobalContext(), APInt(64, val, false));
 }
 
-static void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, Datatype* basetype, int count, int blocklen, int elemstride_in, int elemstride_out, bool pack) {
+static inline void vectorCodegenUnrolled(Value* inbuf, Value* incount, Value* outbuf, Datatype* basetype, int count, int blocklen, int elemstride_in, int elemstride_out, bool pack) {
+    Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
-        /** for debugging **   
-    std::vector<llvm::Type*> printf_arg_types;
-    printf_arg_types.push_back(INT8PTR);
-    FunctionType* printf_type = FunctionType::get(INT32, printf_arg_types, true);
-    Function *func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
-    Value *fmt_ptr = Builder.CreateGlobalStringPtr("stride to add: %i\n\0");
-    Value *fmt_ptr2 = Builder.CreateGlobalStringPtr("restore stride\n\0");
-    // now we can print as follows:
-    //llvm::CallInst *call = builder.CreateCall2(func, fmt_ptr, ValueToPrint);
-    */
-    /*
-    // Prefetch
-    std::vector<Type *> arg_type;
-    Function *fun = Intrinsic::getDeclaration(TheFunction->getParent(), Intrinsic::prefetch, arg_type);
-    std::vector<Value*> args;
-    args.push_back(inbuf);
-    args.push_back(constNode(0));
-    args.push_back(constNode(1));
-    args.push_back(constNode(1));
-    Builder.CreateCall(fun, args);
-    */    
-    #if VECTOR_UNROLL
-    if (count % 4 != 0) { 
-    #endif
-        Function *TheFunction = Builder.GetInsertBlock()->getParent();
-
-        // Entry block
-        Value* out = Builder.CreatePtrToInt(outbuf, INT64);
-        out->setName("out");
-        Value* in = Builder.CreatePtrToInt(inbuf, INT64);
-        in->setName("in");
+    // Entry block
+    Value* out = Builder.CreatePtrToInt(outbuf, INT64);
+    out->setName("out");
+    Value* in = Builder.CreatePtrToInt(inbuf, INT64);
+    in->setName("in");
 
 
-        // Outer loop
-        BasicBlock *Preheader_outer_BB = Builder.GetInsertBlock();
-        BasicBlock *Loop_outer_BB = BasicBlock::Create(getGlobalContext(), "outerloop", TheFunction);
-        Builder.CreateBr(Loop_outer_BB);
-        Builder.SetInsertPoint(Loop_outer_BB);
+    // Outer loop
+    BasicBlock *Preheader_outer_BB = Builder.GetInsertBlock();
+    BasicBlock *Loop_outer_BB = BasicBlock::Create(getGlobalContext(), "outerloop", TheFunction);
+    Builder.CreateBr(Loop_outer_BB);
+    Builder.SetInsertPoint(Loop_outer_BB);
 
-        // Induction var phi nodes
-        PHINode *out1 = Builder.CreatePHI(INT64, 2, "out1");
-        out1->addIncoming(out, Preheader_outer_BB);
-        PHINode *in1= Builder.CreatePHI(INT64, 2, "in1");
-        in1->addIncoming(in, Preheader_outer_BB);
-        PHINode *i = Builder.CreatePHI(INT32, 2, "i");
-        i->addIncoming(constNode(0), Preheader_outer_BB);
+    // Induction var phi nodes
+    PHINode *out1 = Builder.CreatePHI(INT64, 2, "out1");
+    out1->addIncoming(out, Preheader_outer_BB);
+    PHINode *in1= Builder.CreatePHI(INT64, 2, "in1");
+    in1->addIncoming(in, Preheader_outer_BB);
+    PHINode *i = Builder.CreatePHI(INT32, 2, "i");
+    i->addIncoming(constNode(0), Preheader_outer_BB);
 
-        // Compute the size of the data written to the out buffer in the inner loop
-        Value* nextin1 = NULL;
-        Value* nextout1 = NULL;
-        if (pack) {
-            nextout1 = Builder.CreateAdd(out1, constNode(count * (long)elemstride_out));
-            nextout1->setName("nextout1");
-        } 
-        else {
-            nextin1 = Builder.CreateAdd(in1, constNode(count * (long)elemstride_in));
-            nextin1->setName("nextin1");
-        }
-
-        // Inner loop
-        BasicBlock *Preheader_inner_BB = Builder.GetInsertBlock();
-        BasicBlock *Loop_inner_BB = BasicBlock::Create(getGlobalContext(), "innerloop", TheFunction);
-        Builder.CreateBr(Loop_inner_BB);
-        Builder.SetInsertPoint(Loop_inner_BB);
-
-        // Induction var phi nodes
-        PHINode *out2 = Builder.CreatePHI(INT64, 2, "out2");
-        out2->addIncoming(out1, Preheader_inner_BB);
-        PHINode *in2= Builder.CreatePHI(INT64, 2, "in2");
-        in2->addIncoming(in1, Preheader_inner_BB);
-
-        // Cast out2 and in2 to pointers
-        Value* out2_addr = Builder.CreateIntToPtr(out2, INT8PTR);
-        out2_addr->setName("out2_addr");
-        Value* in2_addr = Builder.CreateIntToPtr(in2, INT8PTR);
-        in2_addr->setName("in2_addr");
-
-
-        // Basetype Code Generation
-        if (pack) basetype->Codegen_Pack(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
-        else      basetype->Codegen_Unpack(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
-
-
-        // Increment out2 and in2
-        Value* nextout2 = Builder.CreateAdd(out2, constNode((long)elemstride_out));
-        nextout2->setName("nextout2");
-        Value* nextin2 = Builder.CreateAdd(in2, constNode((long)elemstride_in));
-        nextin2->setName("nextin2");
-
-        // check if we are finished with the loop over count
-        Value* EndCond_inner = (pack) ? Builder.CreateICmpEQ(nextout2, nextout1, "innercond")
-            : Builder.CreateICmpEQ(nextin2, nextin1, "innercond");
-
-        // Create and branch to the inner loop postamble
-        BasicBlock *LoopEnd_inner_BB = Builder.GetInsertBlock();
-        BasicBlock *After_inner_BB = BasicBlock::Create(getGlobalContext(), "afterinner", TheFunction);
-        Builder.CreateCondBr(EndCond_inner, After_inner_BB, Loop_inner_BB);
-        Builder.SetInsertPoint(After_inner_BB);
-
-        // Add backedges for the inner loop induction variables
-        out2->addIncoming(nextout2, LoopEnd_inner_BB);
-        in2->addIncoming(nextin2, LoopEnd_inner_BB);
-
-
-        // Move the the extend-stride ptr back Extent(Basetype) * Stride - Size(Basetype) * Blocklen  
-        if (pack) {
-            nextin1 = Builder.CreateAdd(in1, constNode((long)(elemstride_in * (count-1) + elemstride_out)));
-            nextin1->setName("nextin1");
-        }
-        else {
-            nextout1 = Builder.CreateAdd(out1, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
-            nextout1->setName("nextout1");
-        }
-
-        // Increment outer loop index
-        Value* nexti = Builder.CreateAdd(i, constNode(1), "nexti");
-        Value* EndCond_outer = Builder.CreateICmpEQ(nexti, incount, "outercond");
-
-        // Create and branch to the outer loop postamble
-        BasicBlock *LoopEnd_outer_BB = Builder.GetInsertBlock();
-        BasicBlock *After_outer_BB = BasicBlock::Create(getGlobalContext(), "afterouter", TheFunction);
-        Builder.CreateCondBr(EndCond_outer, After_outer_BB, Loop_outer_BB);
-        Builder.SetInsertPoint(After_outer_BB);
-
-        // Add backedges for the outer loop induction variable
-        out1->addIncoming(nextout1, LoopEnd_outer_BB);
-        in1->addIncoming(nextin1, LoopEnd_outer_BB);
-        i->addIncoming(nexti, LoopEnd_outer_BB);
-        #if VECTOR_UNROLL
-    }
+    // Compute the size of the data written to the out buffer in the inner loop
+    Value* nextin1 = NULL;
+    Value* nextout1 = NULL;
+    if (pack) {
+        nextout1 = Builder.CreateAdd(out1, constNode(count * (long)elemstride_out));
+	nextout1->setName("nextout1");
+    } 
     else {
-        Function *TheFunction = Builder.GetInsertBlock()->getParent();
+        nextin1 = Builder.CreateAdd(in1, constNode(count * (long)elemstride_in));
+        nextin1->setName("nextin1");
+    }
 
-        // Entry block
-        Value* out = Builder.CreatePtrToInt(outbuf, INT64);
-        out->setName("out");
-        Value* in = Builder.CreatePtrToInt(inbuf, INT64);
-        in->setName("in");
+    // Inner loop
+    BasicBlock *Preheader_inner_BB = Builder.GetInsertBlock();
+    BasicBlock *Loop_inner_BB = BasicBlock::Create(getGlobalContext(), "innerloop", TheFunction);
+    Builder.CreateBr(Loop_inner_BB);
+    Builder.SetInsertPoint(Loop_inner_BB);
+    
+    // Induction var phi nodes
+    PHINode *out2_1 = Builder.CreatePHI(INT64, 2, "out2_1");
+    out2_1->addIncoming(out1, Preheader_inner_BB);
+    PHINode *in2_1 = Builder.CreatePHI(INT64, 2, "in2_1");
+    in2_1->addIncoming(in1, Preheader_inner_BB);
+    
+    // Cast out2 and in2 to pointers
+    Value* out2_addr_1 = Builder.CreateIntToPtr(out2_1, INT8PTR, "out2_addr_1");
+    Value* in2_addr_1 = Builder.CreateIntToPtr(in2_1, INT8PTR, "in2_addr_1");
+    
+    Value* out2_2 = Builder.CreateAdd(out2_1, constNode((long)elemstride_out), "out2_2");
+    Value* in2_2 = Builder.CreateAdd(in2_1, constNode((long)elemstride_in), "in2_2");
+    Value* out2_addr_2 = Builder.CreateIntToPtr(out2_2, INT8PTR, "out2_addr_2");
+    Value* in2_addr_2 = Builder.CreateIntToPtr(in2_2, INT8PTR, "in2_addr_2");
+    
+    Value* out2_3 = Builder.CreateAdd(out2_2, constNode((long)elemstride_out), "out2_3");
+    Value* in2_3 = Builder.CreateAdd(in2_2, constNode((long)elemstride_in), "in2_3");
+    Value* out2_addr_3 = Builder.CreateIntToPtr(out2_3, INT8PTR, "out2_addr_3");
+    Value* in2_addr_3 = Builder.CreateIntToPtr(in2_3, INT8PTR, "in2_addr_3");
+    
+    Value* out2_4 = Builder.CreateAdd(out2_3, constNode((long)elemstride_out), "out2_4");
+    Value* in2_4 = Builder.CreateAdd(in2_3, constNode((long)elemstride_in), "in2_4");
+    Value* out2_addr_4 = Builder.CreateIntToPtr(out2_4, INT8PTR, "out2_addr_4");
+    Value* in2_addr_4 = Builder.CreateIntToPtr(in2_4, INT8PTR, "in2_addr_4");
+    
+    Value* out2_5 = Builder.CreateAdd(out2_4, constNode((long)elemstride_out), "out2_5");
+    Value* in2_5 = Builder.CreateAdd(in2_4, constNode((long)elemstride_in), "in2_5");
+    
+    // Basetype Code Generation
+    if (pack) {
+        basetype->Codegen_Pack(in2_addr_1, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_1);
+	basetype->Codegen_Pack(in2_addr_2, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_2);
+	basetype->Codegen_Pack(in2_addr_3, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_3);
+	basetype->Codegen_Pack(in2_addr_4, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_4);
+    }
+    else{
+	basetype->Codegen_Unpack(in2_addr_1, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_1);
+	basetype->Codegen_Unpack(in2_addr_2, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_2);
+	basetype->Codegen_Unpack(in2_addr_3, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_3);
+	basetype->Codegen_Unpack(in2_addr_4, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_4);
+    }
 
-
-        // Outer loop
-        BasicBlock *Preheader_outer_BB = Builder.GetInsertBlock();
-        BasicBlock *Loop_outer_BB = BasicBlock::Create(getGlobalContext(), "outerloop", TheFunction);
-        Builder.CreateBr(Loop_outer_BB);
-        Builder.SetInsertPoint(Loop_outer_BB);
-
-        // Induction var phi nodes
-        PHINode *out1 = Builder.CreatePHI(INT64, 2, "out1");
-        out1->addIncoming(out, Preheader_outer_BB);
-        PHINode *in1= Builder.CreatePHI(INT64, 2, "in1");
-        in1->addIncoming(in, Preheader_outer_BB);
-        PHINode *i = Builder.CreatePHI(INT32, 2, "i");
-        i->addIncoming(constNode(0), Preheader_outer_BB);
-
-        // Compute the size of the data written to the out buffer in the inner loop
-        Value* nextin1 = NULL;
-        Value* nextout1 = NULL;
-        if (pack) {
-            nextout1 = Builder.CreateAdd(out1, constNode(count * (long)elemstride_out));
-            nextout1->setName("nextout1");
-        } 
-        else {
-            nextin1 = Builder.CreateAdd(in1, constNode(count * (long)elemstride_in));
-            nextin1->setName("nextin1");
-        }
-
-        // Inner loop
-        BasicBlock *Preheader_inner_BB = Builder.GetInsertBlock();
-        BasicBlock *Loop_inner_BB = BasicBlock::Create(getGlobalContext(), "innerloop", TheFunction);
-        Builder.CreateBr(Loop_inner_BB);
-        Builder.SetInsertPoint(Loop_inner_BB);
-
-        // Induction var phi nodes
-        PHINode *out2_1 = Builder.CreatePHI(INT64, 2, "out2_1");
-        out2_1->addIncoming(out1, Preheader_inner_BB);
-        PHINode *in2_1 = Builder.CreatePHI(INT64, 2, "in2_1");
-        in2_1->addIncoming(in1, Preheader_inner_BB);
-
-        // Cast out2 and in2 to pointers
-        Value* out2_addr_1 = Builder.CreateIntToPtr(out2_1, INT8PTR, "out2_addr_1");
-        Value* in2_addr_1 = Builder.CreateIntToPtr(in2_1, INT8PTR, "in2_addr_1");
-
-        Value* out2_2 = Builder.CreateAdd(out2_1, constNode((long)elemstride_out), "out2_2");
-        Value* in2_2 = Builder.CreateAdd(in2_1, constNode((long)elemstride_in), "in2_2");
-        Value* out2_addr_2 = Builder.CreateIntToPtr(out2_2, INT8PTR, "out2_addr_2");
-        Value* in2_addr_2 = Builder.CreateIntToPtr(in2_2, INT8PTR, "in2_addr_2");
-
-        Value* out2_3 = Builder.CreateAdd(out2_2, constNode((long)elemstride_out), "out2_3");
-        Value* in2_3 = Builder.CreateAdd(in2_2, constNode((long)elemstride_in), "in2_3");
-        Value* out2_addr_3 = Builder.CreateIntToPtr(out2_3, INT8PTR, "out2_addr_3");
-        Value* in2_addr_3 = Builder.CreateIntToPtr(in2_3, INT8PTR, "in2_addr_3");
-
-        Value* out2_4 = Builder.CreateAdd(out2_3, constNode((long)elemstride_out), "out2_4");
-        Value* in2_4 = Builder.CreateAdd(in2_3, constNode((long)elemstride_in), "in2_4");
-        Value* out2_addr_4 = Builder.CreateIntToPtr(out2_4, INT8PTR, "out2_addr_4");
-        Value* in2_addr_4 = Builder.CreateIntToPtr(in2_4, INT8PTR, "in2_addr_4");
-
-        Value* out2_5 = Builder.CreateAdd(out2_4, constNode((long)elemstride_out), "out2_5");
-        Value* in2_5 = Builder.CreateAdd(in2_4, constNode((long)elemstride_in), "in2_5");
-
-        // Basetype Code Generation
-        if (pack) {
-            basetype->Codegen_Pack(in2_addr_1, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_1);
-            basetype->Codegen_Pack(in2_addr_2, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_2);
-            basetype->Codegen_Pack(in2_addr_3, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_3);
-            basetype->Codegen_Pack(in2_addr_4, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_4);
-        }
-        else{
-            basetype->Codegen_Unpack(in2_addr_1, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_1);
-            basetype->Codegen_Unpack(in2_addr_2, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_2);
-            basetype->Codegen_Unpack(in2_addr_3, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_3);
-            basetype->Codegen_Unpack(in2_addr_4, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr_4);
-        }
-
-        // check if we are finished with the loop over count
-        Value* EndCond_inner = (pack) ? Builder.CreateICmpEQ(out2_5, nextout1, "innercond")
+    // check if we are finished with the loop over count
+    Value* EndCond_inner = (pack) ? Builder.CreateICmpEQ(out2_5, nextout1, "innercond")
             : Builder.CreateICmpEQ(in2_5, nextin1, "innercond");
 
-        // Create and branch to the inner loop postamble
-        BasicBlock *LoopEnd_inner_BB = Builder.GetInsertBlock();
-        BasicBlock *After_inner_BB = BasicBlock::Create(getGlobalContext(), "afterinner", TheFunction);
-        Builder.CreateCondBr(EndCond_inner, After_inner_BB, Loop_inner_BB);
-        Builder.SetInsertPoint(After_inner_BB);
+    // Create and branch to the inner loop postamble
+    BasicBlock *LoopEnd_inner_BB = Builder.GetInsertBlock();
+    BasicBlock *After_inner_BB = BasicBlock::Create(getGlobalContext(), "afterinner", TheFunction);
+    Builder.CreateCondBr(EndCond_inner, After_inner_BB, Loop_inner_BB);
+    Builder.SetInsertPoint(After_inner_BB);
 
-        // Add backedges for the inner loop induction variables
-        out2_1->addIncoming(out2_5, LoopEnd_inner_BB);
-        in2_1->addIncoming(in2_5, LoopEnd_inner_BB);
+    // Add backedges for the inner loop induction variables
+    out2_1->addIncoming(out2_5, LoopEnd_inner_BB);
+    in2_1->addIncoming(in2_5, LoopEnd_inner_BB);
 
 
-        // Move the the extend-stride ptr back Extent(Basetype) * Stride - Size(Basetype) * Blocklen  
-        if (pack) {
-            nextin1 = Builder.CreateAdd(in1, constNode((long)(elemstride_in * (count-1) + elemstride_out)));
-            nextin1->setName("nextin1");
-        }
-        else {
-            nextout1 = Builder.CreateAdd(out1, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
-            nextout1->setName("nextout1");
-        }
+    // Move the the extend-stride ptr back Extent(Basetype) * Stride - Size(Basetype) * Blocklen  
+    if (pack) {
+        nextin1 = Builder.CreateAdd(in1, constNode((long)(elemstride_in * (count-1) + elemstride_out)));
+        nextin1->setName("nextin1");
+    }
+    else {
+        nextout1 = Builder.CreateAdd(out1, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
+        nextout1->setName("nextout1");
+    }
 
-        // Increment outer loop index
-        Value* nexti = Builder.CreateAdd(i, constNode(1), "nexti");
-        Value* EndCond_outer = Builder.CreateICmpEQ(nexti, incount, "outercond");
+    // Increment outer loop index
+    Value* nexti = Builder.CreateAdd(i, constNode(1), "nexti");
+    Value* EndCond_outer = Builder.CreateICmpEQ(nexti, incount, "outercond");
+    
+    // Create and branch to the outer loop postamble
+    BasicBlock *LoopEnd_outer_BB = Builder.GetInsertBlock();
+    BasicBlock *After_outer_BB = BasicBlock::Create(getGlobalContext(), "afterouter", TheFunction);
+    Builder.CreateCondBr(EndCond_outer, After_outer_BB, Loop_outer_BB);
+    Builder.SetInsertPoint(After_outer_BB);
 
-        // Create and branch to the outer loop postamble
-        BasicBlock *LoopEnd_outer_BB = Builder.GetInsertBlock();
-        BasicBlock *After_outer_BB = BasicBlock::Create(getGlobalContext(), "afterouter", TheFunction);
-        Builder.CreateCondBr(EndCond_outer, After_outer_BB, Loop_outer_BB);
-        Builder.SetInsertPoint(After_outer_BB);
+    // Add backedges for the outer loop induction variable
+    out1->addIncoming(nextout1, LoopEnd_outer_BB);
+    in1->addIncoming(nextin1, LoopEnd_outer_BB);
+    i->addIncoming(nexti, LoopEnd_outer_BB);    
+}
 
-        // Add backedges for the outer loop induction variable
-        out1->addIncoming(nextout1, LoopEnd_outer_BB);
-        in1->addIncoming(nextin1, LoopEnd_outer_BB);
-        i->addIncoming(nexti, LoopEnd_outer_BB);
+static inline void vectorCodegenNormal(Value* inbuf, Value* incount, Value* outbuf, Datatype* basetype, int count, int blocklen, int elemstride_in, int elemstride_out, bool pack) {
+    Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
+    // Entry block
+    Value* out = Builder.CreatePtrToInt(outbuf, INT64);
+    out->setName("out");
+    Value* in = Builder.CreatePtrToInt(inbuf, INT64);
+    in->setName("in");
+
+
+    // Outer loop
+    BasicBlock *Preheader_outer_BB = Builder.GetInsertBlock();
+    BasicBlock *Loop_outer_BB = BasicBlock::Create(getGlobalContext(), "outerloop", TheFunction);
+    Builder.CreateBr(Loop_outer_BB);
+    Builder.SetInsertPoint(Loop_outer_BB);
+
+    // Induction var phi nodes
+    PHINode *out1 = Builder.CreatePHI(INT64, 2, "out1");
+    out1->addIncoming(out, Preheader_outer_BB);
+    PHINode *in1= Builder.CreatePHI(INT64, 2, "in1");
+    in1->addIncoming(in, Preheader_outer_BB);
+    PHINode *i = Builder.CreatePHI(INT32, 2, "i");
+    i->addIncoming(constNode(0), Preheader_outer_BB);
+    
+    // Compute the size of the data written to the out buffer in the inner loop
+    Value* nextin1 = NULL;
+    Value* nextout1 = NULL;
+    if (pack) {
+        nextout1 = Builder.CreateAdd(out1, constNode(count * (long)elemstride_out));
+		nextout1->setName("nextout1");
+    } 
+    else {
+        nextin1 = Builder.CreateAdd(in1, constNode(count * (long)elemstride_in));
+		nextin1->setName("nextin1");
+    }
+
+    // Inner loop
+    BasicBlock *Preheader_inner_BB = Builder.GetInsertBlock();
+    BasicBlock *Loop_inner_BB = BasicBlock::Create(getGlobalContext(), "innerloop", TheFunction);
+    Builder.CreateBr(Loop_inner_BB);
+    Builder.SetInsertPoint(Loop_inner_BB);
+    
+    // Induction var phi nodes
+    PHINode *out2 = Builder.CreatePHI(INT64, 2, "out2");
+    out2->addIncoming(out1, Preheader_inner_BB);
+    PHINode *in2= Builder.CreatePHI(INT64, 2, "in2");
+    in2->addIncoming(in1, Preheader_inner_BB);
+    
+    // Cast out2 and in2 to pointers
+    Value* out2_addr = Builder.CreateIntToPtr(out2, INT8PTR);
+    out2_addr->setName("out2_addr");
+    Value* in2_addr = Builder.CreateIntToPtr(in2, INT8PTR);
+    in2_addr->setName("in2_addr");
+    
+
+    // Basetype Code Generation
+    if (pack) basetype->Codegen_Pack(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
+    else      basetype->Codegen_Unpack(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
+
+
+    // Increment out2 and in2
+    Value* nextout2 = Builder.CreateAdd(out2, constNode((long)elemstride_out));
+    nextout2->setName("nextout2");
+    Value* nextin2 = Builder.CreateAdd(in2, constNode((long)elemstride_in));
+    nextin2->setName("nextin2");
+    
+    // check if we are finished with the loop over count
+    Value* EndCond_inner = (pack) ? Builder.CreateICmpEQ(nextout2, nextout1, "innercond")
+            : Builder.CreateICmpEQ(nextin2, nextin1, "innercond");
+    
+    // Create and branch to the inner loop postamble
+    BasicBlock *LoopEnd_inner_BB = Builder.GetInsertBlock();
+    BasicBlock *After_inner_BB = BasicBlock::Create(getGlobalContext(), "afterinner", TheFunction);
+    Builder.CreateCondBr(EndCond_inner, After_inner_BB, Loop_inner_BB);
+    Builder.SetInsertPoint(After_inner_BB);
+
+    // Add backedges for the inner loop induction variables
+    out2->addIncoming(nextout2, LoopEnd_inner_BB);
+    in2->addIncoming(nextin2, LoopEnd_inner_BB);
+
+
+    // Move the the extend-stride ptr back Extent(Basetype) * Stride - Size(Basetype) * Blocklen  
+    if (pack) {
+        nextin1 = Builder.CreateAdd(in1, constNode((long)(elemstride_in * (count-1) + elemstride_out)));
+	nextin1->setName("nextin1");
+    }
+    else {
+	nextout1 = Builder.CreateAdd(out1, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
+	nextout1->setName("nextout1");
+    }
+    
+    // Increment outer loop index
+    Value* nexti = Builder.CreateAdd(i, constNode(1), "nexti");
+    Value* EndCond_outer = Builder.CreateICmpEQ(nexti, incount, "outercond");
+
+    // Create and branch to the outer loop postamble
+    BasicBlock *LoopEnd_outer_BB = Builder.GetInsertBlock();
+    BasicBlock *After_outer_BB = BasicBlock::Create(getGlobalContext(), "afterouter", TheFunction);
+    Builder.CreateCondBr(EndCond_outer, After_outer_BB, Loop_outer_BB);
+    Builder.SetInsertPoint(After_outer_BB);
+
+    // Add backedges for the outer loop induction variable
+    out1->addIncoming(nextout1, LoopEnd_outer_BB);
+    in1->addIncoming(nextin1, LoopEnd_outer_BB);
+    i->addIncoming(nexti, LoopEnd_outer_BB);
+}
+
+static void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, Datatype* basetype, int count, int blocklen, int elemstride_in, int elemstride_out, bool pack) {
+
+    #if VECTOR_UNROLL
+	if (count % 4 != 0) { 
+    #endif
+        vectorCodegenNormal(inbuf, incount, outbuf, basetype, count, blocklen, elemstride_in, elemstride_out, pack);
+    #if VECTOR_UNROLL
+    }
+    else {
+        vectorCodegenUnrolled(inbuf, incount, outbuf, basetype, count, blocklen, elemstride_in, elemstride_out, pack);
     }
     #endif
 }
@@ -380,44 +376,56 @@ PrimitiveDatatype* PrimitiveDatatype::Clone() {
 
 void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     // Three cases:
-    // 1. The value of count is not known to us (supplied at pack/unpack time)
-    //    This case is not very important.  We should just call memcpy.
-    // 2. The value of count is known and a large number (larger than PRIMITIVE_MEMCPY_CUTOFF)
-    // 3. The value of count is known and a small number (smaller than PRIMTIVE_MEMCPY_CUTOFF)
+
+    // 1. The value of count is not known to us (supplied at
+    //    pack/unpack time) This case is not very important.  We
+    //    should just call memcpy.
+    // 2. The value of count is known and a large number (larger than
+    //    PRIMITIVE_MEMCPY_CUTOFF)
+    // 3. The value of count is known and a small number (smaller than
+    //    PRIMTIVE_MEMCPY_CUTOFF)
     //
-    // We don't know what to do for case 2 and 3.  We also don't know wheter we should only
-    // consider two cases for known counts, or whether there are three or even four ranges
-    // that should use different strategies.
+    // We don't know what to do for case 2 and 3.  We also don't know
+    // wheter we should only consider two cases for known counts, or
+    // whether there are three or even four ranges that should use
+    // different strategies.
     //
     // Promising options for known count values include:
-    // a. Call memcpy and hope llvm checks whether count is a constant and lowers it to
-    //    good code for us
-    // b. Generate vector code with unaligned loads and aligned stores, with a preamble to
-    //    copy data until the out ptr is aligned.  We should only operate on vectors that
-    //    are smallish a pow-of-two (8 or 16 elements)
-    // c. Generate unaligned load/store vector code (b, but with unaligned stores and no 
-    //    preamble)
-    // d. Generate aligned vector code with streaming stores (b, stores using the nontemporal 
-    //    hint)
-    // e. Generate code that compiles to "rep mov"-like instructions, where mov may be a 
-    //    memory to memory mov instruction.
+    // a. Call memcpy and hope llvm checks whether count is a constant
+    //    and lowers it to good code for us
+    // b. Generate vector code with unaligned loads and aligned
+    //    stores, with a preamble to copy data until the out ptr is
+    //    aligned.  We should only operate on vectors that are
+    //    smallish a pow-of-two (8 or 16 elements)
+    // c. Generate unaligned load/store vector code (b, but with
+    //    unaligned stores and no preamble)
+    // d. Generate aligned vector code with streaming stores (b,
+    //    stores using the nontemporal hint)
+    // e. Generate code that compiles to "rep mov"-like instructions,
+    //    where mov may be a memory to memory mov instruction.
     //
-    // What should PRIMITIVE_MEMCPY_CUTOFF be?  What value generalizes well?  Do we even need 
-    // generate different llvm IR for these two ranges?  Should there be more than two ranges?
+    // What should PRIMITIVE_MEMCPY_CUTOFF be?  What value generalizes
+    // well?  Do we even need generate different llvm IR for these two
+    // ranges?  Should there be more than two ranges?
     //
-    // I suspect inlined b might work well for smallish counts (<=32 elements).  For very
-    // small counts c might be better since it doesn't require the preamble.  For large counts
-    // a, d and e are top contenders.  e has a large warmup count.  d should allow a higher bw 
-    // because it doesn't require store memory locations to be loaded into the cache.  Intel
-    // recommends considering it if the amount of copied data is larger than half the size of
-    // the last level cache and/or the stored data won't be used by the CPU for a while.  This
-    // option is very interesting since it doesn't flush client code's cached values.  However,
-    // I assume that the NIC reads the values directly from memory, and not through the cache.
-    // e apparantly has a high warmup cost, but some sources say it should be pretty good for
-    // large memcopies.  However, some sources say not all processors implement it well.
+    // I suspect inlined b might work well for smallish counts (<=32
+    // elements).  For very small counts c might be better since it
+    // doesn't require the preamble.  For large counts a, d and e are
+    // top contenders.  e has a large warmup count.  d should allow a
+    // higher bw because it doesn't require store memory locations to
+    // be loaded into the cache.  Intel recommends considering it if
+    // the amount of copied data is larger than half the size of the
+    // last level cache and/or the stored data won't be used by the
+    // CPU for a while.  This option is very interesting since it
+    // doesn't flush client code's cached values.  However, I assume
+    // that the NIC reads the values directly from memory, and not
+    // through the cache.  e apparantly has a high warmup cost, but
+    // some sources say it should be pretty good for large memcopies.
+    // However, some sources say not all processors implement it well.
     // 
-    // Note that all of the above (except from using memcpy for case 1) are UNTESTED 
-    // ASSUMPTIONS.  Don't implement any of this without first testing it.
+    // Note that all of the above (except from using memcpy for case 1
+    // are UNTESTED ASSUMPTIONS.  Don't implement any of this without
+    // first testing it.
 
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     llvm::ConstantInt* incount_ci = dyn_cast<llvm::ConstantInt>(incount);
