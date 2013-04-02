@@ -1,7 +1,12 @@
 CXX=mpic++
 F77=mpif77
 
-PACKVAR?=0
+# Configuration variables picked up from the environment
+PACKVAR     ?= 0
+LLVM_OUTPUT ?= 0
+
+CONFIGVARS = -DPACKVAR=$(PACKVAR) -DLLVM_OUTPUT=$(LLVM_OUTPUT)
+
 
 LDLIBS+=$(shell llvm-config --libs all)
 LDFLAGS+=$(shell llvm-config --ldflags)
@@ -31,7 +36,7 @@ interposer_common.o: interposer_common.cpp ddt_jit.hpp
 	$(CXX) $(CFLAGS) -DHRT_ARCH=2 -c $< -o $@
 
 ddt_jit.o: ddt_jit.cpp ddt_jit.hpp
-	$(CXX) $(CFLAGS) -DPACKVAR=$(PACKVAR) -DHRT_ARCH=2 -c ddt_jit.cpp -o ddt_jit.o
+	$(CXX) $(CFLAGS) $(CONFIGVARS) -DHRT_ARCH=2 -c ddt_jit.cpp -o ddt_jit.o
 
 
 clean:

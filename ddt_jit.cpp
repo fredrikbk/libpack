@@ -34,10 +34,10 @@
 #include "llvm/ExecutionEngine/JIT.h"
 
 #define LLVM_VERIFY LLVM_OUTPUT
-
 #if LLVM_VERIFY
 #include "llvm/Analysis/Verifier.h"
 #endif
+
 #if LLVM_OPTIMIZE
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Passes.h"

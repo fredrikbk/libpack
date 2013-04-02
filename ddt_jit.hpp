@@ -5,14 +5,24 @@
 #include <vector>
 #include <string>
 
-#define LAZY 0 
-#define TIME 0 
-
-#define DDT_OUTPUT     0 
-#define LLVM_OUTPUT    0 
+#define LAZY           0
 #define LLVM_OPTIMIZE  0 
-
 #define VECTOR_UNROLL  0
+
+#define TIME 0
+#define DDT_OUTPUT     0 
+
+// LLVM_OUTPUT should be picked up from the environment by the build system
+#ifndef LLVM_OUTPUT
+#define LLVM_OUTPUT 0
+#endif
+
+// If LLVM_OUTPUT is set then we always want lazy
+#if LLVM_OUTPUT
+#undef LAZY
+#define LAZY 1
+#endif
+ 
 
 /* Forward declare llvm values */
 namespace llvm {
