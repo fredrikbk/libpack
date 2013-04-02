@@ -1,6 +1,8 @@
 CXX=mpic++
 F77=mpif77
 
+PACKVAR?=0
+
 LDLIBS+=$(shell llvm-config --libs all)
 LDFLAGS+=$(shell llvm-config --ldflags)
 CFLAGS+=$(shell llvm-config --cppflags) -O3 -g3
@@ -29,7 +31,7 @@ interposer_common.o: interposer_common.cpp ddt_jit.hpp
 	$(CXX) $(CFLAGS) -DHRT_ARCH=2 -c $< -o $@
 
 ddt_jit.o: ddt_jit.cpp ddt_jit.hpp
-	$(CXX) $(CFLAGS) -DHRT_ARCH=2 -c ddt_jit.cpp -o ddt_jit.o
+	$(CXX) $(CFLAGS) -DPACKVAR=$(PACKVAR) -DHRT_ARCH=2 -c ddt_jit.cpp -o ddt_jit.o
 
 
 clean:
