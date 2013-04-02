@@ -19,6 +19,9 @@ all: $(BINARIES)
 %.o: %.cpp
 	$(CXX) -c -o $@ $< $(CPPFLAGS)
 
+vector_pack: vector_pack.o ../../ddt_jit.o
+	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+
 speedtest_vector_pack: speedtest_vector_pack.o ../../ddt_jit.o
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
