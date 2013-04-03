@@ -380,6 +380,20 @@ PrimitiveDatatype* PrimitiveDatatype::Clone() {
     return t_new;
 }
 
+static void vmove(Value *dst, Value *src, int count, llvm::Type *elemtype) {
+	llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, count));
+	Value *in_vec = Builder.CreateBitCast(src, elemvectype_ptr, "in2_addr_vec");
+	Value *out_vec = Builder.CreateBitCast(dst, elemvectype_ptr, "out2_addr_vec");
+	Value *elems = Builder.CreateAlignedLoad(in_vec, 1, "elems");
+	Builder.CreateAlignedStore(elems, out_vec, 1);
+}
+
+static Value *incrementPtr(Value *ptr, int byteInc) {
+	Value *addr = Builder.CreatePtrToInt(ptr, LLVM_INT64);
+	Value *newaddr = Builder.CreateAdd(addr, Builder.getInt64(byteInc));
+	return Builder.CreateIntToPtr(newaddr, LLVM_INT8PTR);
+}
+
 void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
     // Three cases:
 
@@ -746,85 +760,85 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 		assert(elemtype != NULL);
 
 		// This should be a power of two
-		#ifndef VECTOR_BYTE_SIZE
-		#define VECTOR_BYTE_SIZE 16
+		#ifndef SIMD_BYTE_SIZE
+		#define SIMD_BYTE_SIZE 16
 		#endif
 
-		assert((VECTOR_BYTE_SIZE & (VECTOR_BYTE_SIZE-1)) == 0); // Assert power-of-two
-		assert((VECTOR_BYTE_SIZE % this->Size) == 0);
-		const int vector_size = VECTOR_BYTE_SIZE / this->Size;
+		#ifndef ELEM_LOOP_TRESHOLD
+		#define ELEM_LOOP_TRESHOLD 0
+		#endif
+
+		assert((SIMD_BYTE_SIZE & (SIMD_BYTE_SIZE-1)) == 0); // Assert power-of-two
+		assert((SIMD_BYTE_SIZE % this->Size) == 0);
+		const int vector_size = SIMD_BYTE_SIZE / this->Size;
 		assert((vector_size & (vector_size-1)) == 0); // Assert power-of-two
 
 		// Number of elements to copy
 		int incount_val = incount_ci->getSExtValue();
-		
+
 
 		// Copy incount/vector_size vectors of size vecsize
 		const int vector_count = incount_val / vector_size;
 		llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, vector_size));
 
 		if (vector_count > 0) {
-			Value *inbuf_int = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-			Value *exitval   = Builder.CreateAdd(inbuf_int, constNode((long)vector_count * VECTOR_BYTE_SIZE), "exitval");
+			if (incount_val <= ELEM_LOOP_TRESHOLD) {
+				for (int i=0; i<vector_count; i++) {
+					vmove(outbuf, inbuf, vector_size, elemtype);
+					inbuf  = incrementPtr(inbuf, this->Size * vector_size);
+					outbuf = incrementPtr(outbuf, this->Size * vector_size);
+				}
+				incount_val -= vector_count * vector_size;
+			}
+			else {
+				Value *inbuf_int = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+				Value *exitval   = Builder.CreateAdd(inbuf_int, constNode((long)vector_count * SIMD_BYTE_SIZE), "exitval");
 
-			BasicBlock *header = Builder.GetInsertBlock();
-			BasicBlock *copyloop   = BasicBlock::Create(getGlobalContext(), "copyloop", TheFunction);
-			Builder.CreateBr(copyloop);
-			Builder.SetInsertPoint(copyloop);
+				BasicBlock *header = Builder.GetInsertBlock();
+				BasicBlock *copyloop   = BasicBlock::Create(getGlobalContext(), "copyloop", TheFunction);
+				Builder.CreateBr(copyloop);
+				Builder.SetInsertPoint(copyloop);
 
-			PHINode *inphi = Builder.CreatePHI(LLVM_INT8PTR, 2, "in3");
-			inphi->addIncoming(inbuf, header);
-			PHINode *outphi  = Builder.CreatePHI(LLVM_INT8PTR, 2, "out3");
-			outphi->addIncoming(outbuf, header);
-			inbuf  = inphi;
-			outbuf = outphi;
+				PHINode *inphi = Builder.CreatePHI(LLVM_INT8PTR, 2, "in3");
+				inphi->addIncoming(inbuf, header);
+				PHINode *outphi  = Builder.CreatePHI(LLVM_INT8PTR, 2, "out3");
+				outphi->addIncoming(outbuf, header);
+				inbuf  = inphi;
+				outbuf = outphi;
 
-			Value *in_addr = NULL;
-			// for (int i=0; i<vector_count; i++) {
-				Value *in_vec = Builder.CreateBitCast(inbuf, elemvectype_ptr, "in2_addr_vec");
-				Value *out_vec = Builder.CreateBitCast(outbuf, elemvectype_ptr, "out2_addr_vec");
-				Value *elems = Builder.CreateAlignedLoad(in_vec, 1, "elems");
-				Builder.CreateAlignedStore(elems, out_vec, 1);
+				Value *in_addr = NULL;
+				// for (int i=0; i<vector_count; i++) {
+					vmove(outbuf, inbuf, vector_size, elemtype);
 
-				Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-				in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * vector_size));
-				inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
+					Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+					in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * vector_size));
+					inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 
-				Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
-				Value *out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(this->Size * vector_size));
-				outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
-			// }
-			incount_val -= vector_count * vector_size;
+					Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
+					Value *out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(this->Size * vector_size));
+					outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
+				// }
+				incount_val -= vector_count * vector_size;
 
-			inphi->addIncoming(inbuf, copyloop);
-			outphi->addIncoming(outbuf, copyloop);
+				inphi->addIncoming(inbuf, copyloop);
+				outphi->addIncoming(outbuf, copyloop);
 
-			// Create and jump to postamble
-			BasicBlock *copypostamble = BasicBlock::Create(getGlobalContext(), "copypostamble", TheFunction);
-			Value *exitcond = Builder.CreateICmpEQ(in_addr, exitval);
-			Builder.CreateCondBr(exitcond, copypostamble, copyloop);
-			Builder.SetInsertPoint(copypostamble);
+				// Create and jump to postamble
+				BasicBlock *copypostamble = BasicBlock::Create(getGlobalContext(), "copypostamble", TheFunction);
+				Value *exitcond = Builder.CreateICmpEQ(in_addr, exitval);
+				Builder.CreateCondBr(exitcond, copypostamble, copyloop);
+				Builder.SetInsertPoint(copypostamble);
+			}
 		}
 
 
 		// Copy postamble: copy the overflow elements that did not fit in full vector
 		for (int vecsize=vector_size/2; vecsize > 0; vecsize /= 2) {
 			const int veccount = incount_val / vecsize;
-			llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, vecsize));
-
 			for (int i=0; i<veccount; i++) {
-				Value *in_vec = Builder.CreateBitCast(inbuf, elemvectype_ptr, "in2_addr_vec");
-				Value *out_vec = Builder.CreateBitCast(outbuf, elemvectype_ptr, "out2_addr_vec");
-				Value *elems = Builder.CreateAlignedLoad(in_vec, 1, "elems");
-				Builder.CreateAlignedStore(elems, out_vec, 1);
-
-				Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-				Value *in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * vecsize));
-				inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
-
-				Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
-				Value *out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(this->Size * vecsize));
-				outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
+				vmove(outbuf, inbuf, vecsize, elemtype);
+				inbuf  = incrementPtr(inbuf, this->Size * vecsize);
+				outbuf = incrementPtr(outbuf, this->Size * vecsize);
 			}
 			incount_val -= veccount * vecsize;
 		}
