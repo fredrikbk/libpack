@@ -433,7 +433,7 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
     if (incount_ci != NULL) {
 #if !PACKVAR
 #undef PACKVAR
-#define PACKVAR 1
+#define PACKVAR 8
 #endif
 
 
@@ -1317,7 +1317,7 @@ int HIndexedDatatype::getSize() {
 void HIndexedDatatype::print(std::string indent) {
     fprintf(stderr, "%shindexed(count=%d)\n", indent.c_str(), this->Count);
     for (int i=0; i<Displ.size(); i++) {
-        fprintf(stderr, "%s(displ=%d, blocklen=%d)\n", (indent+indent_str).c_str(), Displ[i], Blocklen[i]);
+        fprintf(stderr, "%s(displ=%ld, blocklen=%d)\n", (indent+indent_str).c_str(), Displ[i], Blocklen[i]);
     }
     Basetype->print(indent+indent_str+indent_str);
 }
@@ -1445,7 +1445,7 @@ int StructDatatype::getSize() {
 void StructDatatype::print(std::string indent) {
     fprintf(stderr, "%shindexed(count=%d)\n", indent.c_str(), this->Count);
     for (int i=0; i<Displ.size(); i++) {
-        fprintf(stderr, "%s(displ=%d, blocklen=%d)\n", (indent+indent_str).c_str(), Displ[i], Blocklen[i]);
+        fprintf(stderr, "%s(displ=%ld, blocklen=%d)\n", (indent+indent_str).c_str(), Displ[i], Blocklen[i]);
         Types[i]->print(indent+indent_str+indent_str);
     }
 }
