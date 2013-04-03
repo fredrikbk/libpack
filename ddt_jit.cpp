@@ -74,16 +74,22 @@ static ExecutionEngine *TheExecutionEngine;
 std::vector<std::string> Args;
 FunctionType *FT;
 
-#define VOID     Type::getVoidTy(getGlobalContext())
-#define INT8     Type::getInt8Ty(getGlobalContext())
-#define INT32    Type::getInt32Ty(getGlobalContext())
-#define INT64    Type::getInt64Ty(getGlobalContext())
-#define INT8PTR  Type::getInt8PtrTy(getGlobalContext())
+#define LLVM_VOID     Type::getVoidTy(getGlobalContext())
 
-/** for debugging **   
+#define LLVM_INT      Type::getInt32Ty(getGlobalContext())
+#define LLVM_INT8     Type::getInt8Ty(getGlobalContext())
+#define LLVM_INT32    Type::getInt32Ty(getGlobalContext())
+#define LLVM_INT64    Type::getInt64Ty(getGlobalContext())
+#define LLVM_INT8PTR  Type::getInt8PtrTy(getGlobalContext())
+
+
+#define LLVM_FLOAT    Type::getFloatTy(getGlobalContext())
+#define LLVM_DOUBLE   Type::getDoubleTy(getGlobalContext())
+
+/** for debugging **
 std::vector<llvm::Type*> printf_arg_types;
-printf_arg_types.push_back(INT8PTR);
-FunctionType* printf_type = FunctionType::get(INT32, printf_arg_types, true);
+printf_arg_types.push_back(LLVM_INT8PTR);
+FunctionType* printf_type = FunctionType::get(LLVM_INT32, printf_arg_types, true);
 Function *func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), TheModule);
 Value *fmt_ptr = Builder.CreateGlobalStringPtr("stride to add: %i\n\0");
 Value *fmt_ptr2 = Builder.CreateGlobalStringPtr("restore stride\n\0");
@@ -94,7 +100,7 @@ Value *fmt_ptr2 = Builder.CreateGlobalStringPtr("restore stride\n\0");
 /* Codegen Functions */
 static Value* multNode(int op1, Value* op2PtrNode) {
     Value* op1Node = ConstantInt::get(getGlobalContext(), APInt(64, op1, false));
-    Value* op2Node = Builder.CreateIntCast(op2PtrNode, INT64, false); 
+    Value* op2Node = Builder.CreateIntCast(op2PtrNode, LLVM_INT64, false); 
     return Builder.CreateMul(op1Node, op2Node);
 }
 
@@ -110,9 +116,9 @@ static inline void vectorCodegenUnrolled(Value* inbuf, Value* incount, Value* ou
     Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Entry block
-    Value* out = Builder.CreatePtrToInt(outbuf, INT64);
+    Value* out = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
     out->setName("out");
-    Value* in = Builder.CreatePtrToInt(inbuf, INT64);
+    Value* in = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
     in->setName("in");
 
 
@@ -123,11 +129,11 @@ static inline void vectorCodegenUnrolled(Value* inbuf, Value* incount, Value* ou
     Builder.SetInsertPoint(Loop_outer_BB);
 
     // Induction var phi nodes
-    PHINode *out1 = Builder.CreatePHI(INT64, 2, "out1");
+    PHINode *out1 = Builder.CreatePHI(LLVM_INT64, 2, "out1");
     out1->addIncoming(out, Preheader_outer_BB);
-    PHINode *in1= Builder.CreatePHI(INT64, 2, "in1");
+    PHINode *in1= Builder.CreatePHI(LLVM_INT64, 2, "in1");
     in1->addIncoming(in, Preheader_outer_BB);
-    PHINode *i = Builder.CreatePHI(INT32, 2, "i");
+    PHINode *i = Builder.CreatePHI(LLVM_INT32, 2, "i");
     i->addIncoming(constNode(0), Preheader_outer_BB);
 
     // Compute the size of the data written to the out buffer in the inner loop
@@ -149,29 +155,29 @@ static inline void vectorCodegenUnrolled(Value* inbuf, Value* incount, Value* ou
     Builder.SetInsertPoint(Loop_inner_BB);
     
     // Induction var phi nodes
-    PHINode *out2_1 = Builder.CreatePHI(INT64, 2, "out2_1");
+    PHINode *out2_1 = Builder.CreatePHI(LLVM_INT64, 2, "out2_1");
     out2_1->addIncoming(out1, Preheader_inner_BB);
-    PHINode *in2_1 = Builder.CreatePHI(INT64, 2, "in2_1");
+    PHINode *in2_1 = Builder.CreatePHI(LLVM_INT64, 2, "in2_1");
     in2_1->addIncoming(in1, Preheader_inner_BB);
     
     // Cast out2 and in2 to pointers
-    Value* out2_addr_1 = Builder.CreateIntToPtr(out2_1, INT8PTR, "out2_addr_1");
-    Value* in2_addr_1 = Builder.CreateIntToPtr(in2_1, INT8PTR, "in2_addr_1");
+    Value* out2_addr_1 = Builder.CreateIntToPtr(out2_1, LLVM_INT8PTR, "out2_addr_1");
+    Value* in2_addr_1 = Builder.CreateIntToPtr(in2_1, LLVM_INT8PTR, "in2_addr_1");
     
     Value* out2_2 = Builder.CreateAdd(out2_1, constNode((long)elemstride_out), "out2_2");
     Value* in2_2 = Builder.CreateAdd(in2_1, constNode((long)elemstride_in), "in2_2");
-    Value* out2_addr_2 = Builder.CreateIntToPtr(out2_2, INT8PTR, "out2_addr_2");
-    Value* in2_addr_2 = Builder.CreateIntToPtr(in2_2, INT8PTR, "in2_addr_2");
+    Value* out2_addr_2 = Builder.CreateIntToPtr(out2_2, LLVM_INT8PTR, "out2_addr_2");
+    Value* in2_addr_2 = Builder.CreateIntToPtr(in2_2, LLVM_INT8PTR, "in2_addr_2");
     
     Value* out2_3 = Builder.CreateAdd(out2_2, constNode((long)elemstride_out), "out2_3");
     Value* in2_3 = Builder.CreateAdd(in2_2, constNode((long)elemstride_in), "in2_3");
-    Value* out2_addr_3 = Builder.CreateIntToPtr(out2_3, INT8PTR, "out2_addr_3");
-    Value* in2_addr_3 = Builder.CreateIntToPtr(in2_3, INT8PTR, "in2_addr_3");
+    Value* out2_addr_3 = Builder.CreateIntToPtr(out2_3, LLVM_INT8PTR, "out2_addr_3");
+    Value* in2_addr_3 = Builder.CreateIntToPtr(in2_3, LLVM_INT8PTR, "in2_addr_3");
     
     Value* out2_4 = Builder.CreateAdd(out2_3, constNode((long)elemstride_out), "out2_4");
     Value* in2_4 = Builder.CreateAdd(in2_3, constNode((long)elemstride_in), "in2_4");
-    Value* out2_addr_4 = Builder.CreateIntToPtr(out2_4, INT8PTR, "out2_addr_4");
-    Value* in2_addr_4 = Builder.CreateIntToPtr(in2_4, INT8PTR, "in2_addr_4");
+    Value* out2_addr_4 = Builder.CreateIntToPtr(out2_4, LLVM_INT8PTR, "out2_addr_4");
+    Value* in2_addr_4 = Builder.CreateIntToPtr(in2_4, LLVM_INT8PTR, "in2_addr_4");
     
     Value* out2_5 = Builder.CreateAdd(out2_4, constNode((long)elemstride_out), "out2_5");
     Value* in2_5 = Builder.CreateAdd(in2_4, constNode((long)elemstride_in), "in2_5");
@@ -235,9 +241,9 @@ static inline void vectorCodegenNormal(Value* inbuf, Value* incount, Value* outb
     Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Entry block
-    Value* out = Builder.CreatePtrToInt(outbuf, INT64);
+    Value* out = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
     out->setName("out");
-    Value* in = Builder.CreatePtrToInt(inbuf, INT64);
+    Value* in = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
     in->setName("in");
 
 
@@ -248,11 +254,11 @@ static inline void vectorCodegenNormal(Value* inbuf, Value* incount, Value* outb
     Builder.SetInsertPoint(Loop_outer_BB);
 
     // Induction var phi nodes
-    PHINode *out1 = Builder.CreatePHI(INT64, 2, "out1");
+    PHINode *out1 = Builder.CreatePHI(LLVM_INT64, 2, "out1");
     out1->addIncoming(out, Preheader_outer_BB);
-    PHINode *in1= Builder.CreatePHI(INT64, 2, "in1");
+    PHINode *in1= Builder.CreatePHI(LLVM_INT64, 2, "in1");
     in1->addIncoming(in, Preheader_outer_BB);
-    PHINode *i = Builder.CreatePHI(INT32, 2, "i");
+    PHINode *i = Builder.CreatePHI(LLVM_INT32, 2, "i");
     i->addIncoming(constNode(0), Preheader_outer_BB);
     
     // Compute the size of the data written to the out buffer in the inner loop
@@ -274,15 +280,15 @@ static inline void vectorCodegenNormal(Value* inbuf, Value* incount, Value* outb
     Builder.SetInsertPoint(Loop_inner_BB);
     
     // Induction var phi nodes
-    PHINode *out2 = Builder.CreatePHI(INT64, 2, "out2");
+    PHINode *out2 = Builder.CreatePHI(LLVM_INT64, 2, "out2");
     out2->addIncoming(out1, Preheader_inner_BB);
-    PHINode *in2= Builder.CreatePHI(INT64, 2, "in2");
+    PHINode *in2= Builder.CreatePHI(LLVM_INT64, 2, "in2");
     in2->addIncoming(in1, Preheader_inner_BB);
     
     // Cast out2 and in2 to pointers
-    Value* out2_addr = Builder.CreateIntToPtr(out2, INT8PTR);
+    Value* out2_addr = Builder.CreateIntToPtr(out2, LLVM_INT8PTR);
     out2_addr->setName("out2_addr");
-    Value* in2_addr = Builder.CreateIntToPtr(in2, INT8PTR);
+    Value* in2_addr = Builder.CreateIntToPtr(in2, LLVM_INT8PTR);
     in2_addr->setName("in2_addr");
     
 
@@ -442,7 +448,7 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 #if PACKVAR == 1        
         // Bitcast instructions that make it easier to interface with the outside code.
         // Note that these don't result in any assembly instructions
-        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(LLVM_INT8, this->getSize() * incount_ci->getSExtValue()));
         Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
         Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
 
@@ -452,7 +458,7 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 #elif PACKVAR == 2       
         // Bitcast instructions that make it easier to interface with the outside code.
         // Note that these don't result in any assembly instructions
-        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(LLVM_INT8, this->getSize() * incount_ci->getSExtValue()));
         Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
         Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
 
@@ -462,7 +468,7 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 #elif PACKVAR == 3
         // Bitcast instructions that make it easier to interface with the outside code.
         // Note that these don't result in any assembly instructions
-        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(INT8, this->getSize() * incount_ci->getSExtValue()));
+        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(LLVM_INT8, this->getSize() * incount_ci->getSExtValue()));
         Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
         Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
 
@@ -484,25 +490,25 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 16);
 			store->setMetadata(TheModule->getMDKindID("nontemporal"), Node); // why the hell do i have to supply 1 here llvm?
 
-    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
     		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(16));
-    		outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+    		outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
-    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
     		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(16));
-    		inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+    		inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 			
 			size_to_pack -= 16;
 		}
 
 		// revert changes to inbuf, outbuf
-    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
     	Value* out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(-size_to_pack));
-    	outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+    	outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
-    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
     	Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(-size_to_pack));
-    	inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+    	inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 #elif PACKVAR == 5
 		int size_to_pack = this->getSize() * incount_ci->getSExtValue();
         llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getDoubleTy(getGlobalContext()), 2));
@@ -515,25 +521,25 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 			Value* bytes = Builder.CreateAlignedLoad(in_vec, 16, "bytes");
 			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 16);
 
-    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
     		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(16));
-    		outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+    		outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
-    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
     		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(16));
-    		inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+    		inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 			
 			size_to_pack -= 16;
 		}
 
 		// revert changes to inbuf, outbuf
-    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
     	Value* out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(-size_to_pack));
-    	outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+    	outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
-    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
     	Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(-size_to_pack));
-    	inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+    	inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 #elif PACKVAR == 6
 		Value* contig_extend = multNode(this->getSize(), incount);
         Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
@@ -556,12 +562,12 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
                 Builder.CreateStore(bytes, out_vec);
 
                 //increment inbuf and outbuf by "packed"
-                Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+                Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
                 Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(pack_now));
-                inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
-                Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+                inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
+                Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
                 Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(pack_now));
-                outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+                outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
                 size_to_pack -= pack_now;
             }
@@ -573,8 +579,8 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 
             Value* size_to_pack = constNode((long) (this->getSize() * incount_ci->getSExtValue()));
 
-            Value* in = Builder.CreatePtrToInt(inbuf, INT64);
-            Value* out = Builder.CreatePtrToInt(outbuf, INT64);
+            Value* in = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+            Value* out = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
 
             // loop
             BasicBlock *Preheader_prefix_BB = Builder.GetInsertBlock();
@@ -586,11 +592,11 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
             Builder.SetInsertPoint(Condition_prefix_BB);
 
             // Induction var phi nodes
-            PHINode *out2 = Builder.CreatePHI(INT64, 2, "out2");
+            PHINode *out2 = Builder.CreatePHI(LLVM_INT64, 2, "out2");
             out2->addIncoming(out, Preheader_prefix_BB);
-            PHINode *in2= Builder.CreatePHI(INT64, 2, "in2");
+            PHINode *in2= Builder.CreatePHI(LLVM_INT64, 2, "in2");
             in2->addIncoming(in, Preheader_prefix_BB);
-            PHINode *size_to_pack2 = Builder.CreatePHI(INT64, 2, "size_to_pack2");
+            PHINode *size_to_pack2 = Builder.CreatePHI(LLVM_INT64, 2, "size_to_pack2");
             size_to_pack2->addIncoming(size_to_pack, Preheader_prefix_BB);
 
             Value* out_masked = Builder.CreateAnd(out2, constNode(0xFL));
@@ -599,8 +605,8 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
             Builder.SetInsertPoint(Loop_prefix_BB);
 
             // Cast out2 and in2 to pointers
-            Value* out2_addr = Builder.CreateIntToPtr(out2, INT8PTR, "out2_addr");
-            Value* in2_addr = Builder.CreateIntToPtr(in2, INT8PTR, "in2_addr");
+            Value* out2_addr = Builder.CreateIntToPtr(out2, LLVM_INT8PTR, "out2_addr");
+            Value* in2_addr = Builder.CreateIntToPtr(in2, LLVM_INT8PTR, "in2_addr");
 
             //load-store
             Value* byte = Builder.CreateLoad(in2_addr, "byte");
@@ -633,11 +639,11 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
             Builder.SetInsertPoint(Condition_aligned_BB);
 
             // Induction var phi nodes
-            PHINode *out_aligned_2 = Builder.CreatePHI(INT64, 2, "out_aligned_2");
+            PHINode *out_aligned_2 = Builder.CreatePHI(LLVM_INT64, 2, "out_aligned_2");
             out_aligned_2->addIncoming(out2, Preheader_aligned_BB);
-            PHINode *in_aligned_2= Builder.CreatePHI(INT64, 2, "in_aligned_2");
+            PHINode *in_aligned_2= Builder.CreatePHI(LLVM_INT64, 2, "in_aligned_2");
             in_aligned_2->addIncoming(in2, Preheader_aligned_BB);
-            PHINode *size_to_pack_aligned_2 = Builder.CreatePHI(INT64, 2, "size_to_pack_aligned_2");
+            PHINode *size_to_pack_aligned_2 = Builder.CreatePHI(LLVM_INT64, 2, "size_to_pack_aligned_2");
             size_to_pack_aligned_2->addIncoming(size_to_pack2, Preheader_aligned_BB);
 
             Value* StartCond_aligned = Builder.CreateICmpULT(size_to_pack_aligned_2, constNode(16L), "alignedstartcond");
@@ -645,8 +651,8 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
             Builder.SetInsertPoint(Loop_aligned_BB);
 
             // Cast out_aligned_2 and in_aligned_2 to pointers
-            Value* out_aligned_2_addr = Builder.CreateIntToPtr(out_aligned_2, INT8PTR, "out_aligned_2_addr");
-            Value* in_aligned_2_addr = Builder.CreateIntToPtr(in_aligned_2, INT8PTR, "in_aligned_2_addr");
+            Value* out_aligned_2_addr = Builder.CreateIntToPtr(out_aligned_2, LLVM_INT8PTR, "out_aligned_2_addr");
+            Value* in_aligned_2_addr = Builder.CreateIntToPtr(in_aligned_2, LLVM_INT8PTR, "in_aligned_2_addr");
 
             //load-store
             llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getDoubleTy(getGlobalContext()), 2));
@@ -681,11 +687,11 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
             Builder.SetInsertPoint(Condition_tail_BB);
 
             // Induction var phi nodes
-            PHINode *out_tail_2 = Builder.CreatePHI(INT64, 2, "out_tail_2");
+            PHINode *out_tail_2 = Builder.CreatePHI(LLVM_INT64, 2, "out_tail_2");
             out_tail_2->addIncoming(out_aligned_2, Preheader_tail_BB);
-            PHINode *in_tail_2= Builder.CreatePHI(INT64, 2, "in_tail_2");
+            PHINode *in_tail_2= Builder.CreatePHI(LLVM_INT64, 2, "in_tail_2");
             in_tail_2->addIncoming(in_aligned_2, Preheader_tail_BB);
-            PHINode *size_to_pack_tail_2 = Builder.CreatePHI(INT64, 2, "size_to_pack_tail_2");
+            PHINode *size_to_pack_tail_2 = Builder.CreatePHI(LLVM_INT64, 2, "size_to_pack_tail_2");
             size_to_pack_tail_2->addIncoming(size_to_pack_aligned_2, Preheader_tail_BB);
 
             Value* StartCond_tail = Builder.CreateICmpEQ(size_to_pack_tail_2, constNode(0L), "tailstartcond");
@@ -693,8 +699,8 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
             Builder.SetInsertPoint(Loop_tail_BB);
 
             // Cast out_tail_2 and in_tail_2 to pointers
-            Value* out_tail_2_addr = Builder.CreateIntToPtr(out_tail_2, INT8PTR, "out_tail_2_addr");
-            Value* in_tail_2_addr = Builder.CreateIntToPtr(in_tail_2, INT8PTR, "in_tail_2_addr");
+            Value* out_tail_2_addr = Builder.CreateIntToPtr(out_tail_2, LLVM_INT8PTR, "out_tail_2_addr");
+            Value* in_tail_2_addr = Builder.CreateIntToPtr(in_tail_2, LLVM_INT8PTR, "in_tail_2_addr");
 
             //load-store
             Value* byte_tail = Builder.CreateLoad(in_tail_2_addr, "byte");
@@ -716,85 +722,67 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 
         }
 #elif PACKVAR == 8
-		int size_to_pack = this->getSize() * incount_ci->getSExtValue();
-        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getDoubleTy(getGlobalContext()), 2));
+		llvm::Type *elemtype = NULL;
+		switch (this->Type) {
+		case DOUBLE:
+			elemtype = LLVM_DOUBLE;
+			break;
+		case INT:
+			elemtype = LLVM_INT;
+			break;
+		case FLOAT:
+			elemtype = LLVM_FLOAT;
+			break;
+		case BYTE:
+			elemtype = LLVM_INT8;
+			break;
+		case CHAR:
+			elemtype = LLVM_INT8;
+			break;
+		default:
+			fprintf(stderr, "Type not supported");
+			assert(false);
+		}
+		assert(elemtype != NULL);
+		llvm::Type *elemtype_ptr = PointerType::getUnqual(elemtype);
+		llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, 2));
 
-		while (size_to_pack >= 16) {
-		
-			MDNode *Node = MDNode::get(getGlobalContext(), Builder.getInt32(1));
-			Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
-			Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
-			Value* bytes = Builder.CreateAlignedLoad(in_vec, 1, "bytes");
-			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 1);
-			store->setMetadata(TheModule->getMDKindID("nontemporal"), Node); // why the hell do i have to supply 1 here llvm?
+		int incount_val = incount_ci->getSExtValue();
 
-    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
-    		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(16));
-    		outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+		// If we are packing an odd number then move one element first
+		if (incount_val % 2) {
+			Value *in_ptr = Builder.CreateBitCast(inbuf, elemtype_ptr, "in2_addr");
+			Value *out_ptr = Builder.CreateBitCast(outbuf, elemtype_ptr, "out2_addr");
+			Value *elem = Builder.CreateLoad(in_ptr, "elem");
+			Builder.CreateStore(elem, out_ptr);
 
-    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
-    		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(16));
-    		inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
-			
-			size_to_pack -= 16;
+    		Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+    		Value *in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size));
+    		inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
+
+    		Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
+    		Value *out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(this->Size));
+    		outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
+
+			incount_val--;
 		}
 
-		while (size_to_pack >= 8) {
-		
-            llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getDoubleTy(getGlobalContext()), 1));
+		assert(!(incount_val % 2));
+		for (int i=0; i<incount_val; i+=2) {
+			Value *in_vec = Builder.CreateBitCast(inbuf, elemvectype_ptr, "in2_addr_vec");
+			Value *out_vec = Builder.CreateBitCast(outbuf, elemvectype_ptr, "out2_addr_vec");
+			Value *elems = Builder.CreateAlignedLoad(in_vec, 1, "elems");
+			Builder.CreateAlignedStore(elems, out_vec, 1);
 
-            MDNode *Node = MDNode::get(getGlobalContext(), Builder.getInt32(1));
-			Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
-			Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
-			Value* bytes = Builder.CreateAlignedLoad(in_vec, 1, "bytes");
-			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 1);
-			store->setMetadata(TheModule->getMDKindID("nontemporal"), Node); // why the hell do i have to supply 1 here llvm?
+    		Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+    		Value *in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * 2));
+    		inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 
-    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
-    		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(8));
-    		outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
-
-    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
-    		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(8));
-    		inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
-			
-			size_to_pack -= 8;
+    		Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
+    		Value *out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(this->Size * 2));
+    		outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 		}
 
-		while (size_to_pack >= 1) {
-		
-            llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getInt8Ty(getGlobalContext()), 1));
-
-            MDNode *Node = MDNode::get(getGlobalContext(), Builder.getInt32(1));
-			Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
-			Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
-			Value* bytes = Builder.CreateAlignedLoad(in_vec, 1, "bytes");
-			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 1);
-			store->setMetadata(TheModule->getMDKindID("nontemporal"), Node); // why the hell do i have to supply 1 here llvm?
-
-    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
-    		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(1));
-    		outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
-
-    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
-    		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(1));
-    		inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
-			
-			size_to_pack -= 1;
-		}
-
-
-
-
-
-		// revert changes to inbuf, outbuf
-    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
-    	Value* out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(-size_to_pack));
-    	outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
-
-    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
-    	Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(-size_to_pack));
-    	inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
 #elif PACKVAR == 9
 		int size_to_pack = this->getSize() * incount_ci->getSExtValue();
         llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getDoubleTy(getGlobalContext()), 2));
@@ -807,25 +795,25 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 			Value* bytes = Builder.CreateAlignedLoad(in_vec, 1, "bytes");
 			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 16);
 
-    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
     		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(16));
-    		outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+    		outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
-    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
     		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(16));
-    		inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+    		inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 			
 			size_to_pack -= 16;
 		}
 
 		// revert changes to inbuf, outbuf
-    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, INT64);
+    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
     	Value* out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(-size_to_pack));
-    	outbuf = Builder.CreateIntToPtr(out_addr, INT8PTR);
+    	outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
-    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, INT64);
+    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
     	Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(-size_to_pack));
-    	inbuf = Builder.CreateIntToPtr(in_addr, INT8PTR);
+    	inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 #else
 #error NO PACKVAR DEFINED
 #endif
@@ -949,11 +937,11 @@ void ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, in
     Builder.SetInsertPoint(LoopBB);
 
     // Induction var phi nodes
-    PHINode *out = Builder.CreatePHI(INT8PTR, 2, "out");
+    PHINode *out = Builder.CreatePHI(LLVM_INT8PTR, 2, "out");
     out->addIncoming(outbuf, PreheaderBB);
-    PHINode *in= Builder.CreatePHI(INT8PTR, 2, "in");
+    PHINode *in= Builder.CreatePHI(LLVM_INT8PTR, 2, "in");
     in->addIncoming(inbuf, PreheaderBB);
-    PHINode *i = Builder.CreatePHI(INT32, 2, "i");
+    PHINode *i = Builder.CreatePHI(LLVM_INT32, 2, "i");
     i->addIncoming(constNode(0), PreheaderBB);
 
 
@@ -964,15 +952,15 @@ void ContiguousDatatype::Codegen(Value* inbuf, Value* incount, Value* outbuf, in
 
     // Increment the out ptr by Size(Basetype) * Blocklen
     Value* out_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_out * this->Count, false));
-    Value* out_addr_cvi = Builder.CreatePtrToInt(out, INT64);
+    Value* out_addr_cvi = Builder.CreatePtrToInt(out, LLVM_INT64);
     Value* out_addr = Builder.CreateAdd(out_addr_cvi, out_bytes_to_stride);
-    Value* nextout = Builder.CreateIntToPtr(out_addr, INT8PTR);
+    Value* nextout = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
     // Increment the in ptr by Extent(Basetype) * Stride
     Value* in_bytes_to_stride = ConstantInt::get(getGlobalContext(), APInt(64, elemstride_in * this->Count, false));
-    Value* in_addr_cvi = Builder.CreatePtrToInt(in, INT64);
+    Value* in_addr_cvi = Builder.CreatePtrToInt(in, LLVM_INT64);
     Value* in_addr = Builder.CreateAdd(in_addr_cvi, in_bytes_to_stride);
-    Value* nextin = Builder.CreateIntToPtr(in_addr, INT8PTR);
+    Value* nextin = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 
     // Increment outer loop index
     Value* nexti = Builder.CreateAdd(i, constNode(1), "nexti");
@@ -1137,9 +1125,9 @@ void IndexedBlockDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Base address of the input buffer
-    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, INT64);
+    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, LLVM_INT64);
     Value* extend = constNode((long)this->getExtent());
-    Value* incount_64 = Builder.CreateZExt(incount, INT64);
+    Value* incount_64 = Builder.CreateZExt(incount, LLVM_INT64);
     Value* incount_expanded = Builder.CreateMul(incount_64, extend);
 
     // Loop
@@ -1148,12 +1136,12 @@ void IndexedBlockDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value
     Builder.CreateBr(LoopBB);
     Builder.SetInsertPoint(LoopBB);
 
-    PHINode *compact = Builder.CreatePHI(INT8PTR, 2, "compact");
+    PHINode *compact = Builder.CreatePHI(LLVM_INT8PTR, 2, "compact");
     compact->addIncoming(compactbuf, PreheaderBB);
-    PHINode* i = Builder.CreatePHI(INT64, 2, "i");
+    PHINode* i = Builder.CreatePHI(LLVM_INT64, 2, "i");
     i->addIncoming(constNode(0l), PreheaderBB);
 
-    Value* compact_addr = Builder.CreatePtrToInt(compact, INT64);
+    Value* compact_addr = Builder.CreatePtrToInt(compact, LLVM_INT64);
 
     // OPT: Make this the loop counter
     Value* scattered_disp_base = Builder.CreateAdd(scatteredbuf_orig_int, i);
@@ -1165,14 +1153,14 @@ void IndexedBlockDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value
         // Set the scattered ptr to scattered_disp_base + this->Disl[i] * Basetype->size
         Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i] * Basetype->getSize(), false));
         Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
-        Value* scattered = Builder.CreateIntToPtr(scattered_disp, INT8PTR);
+        Value* scattered = Builder.CreateIntToPtr(scattered_disp, LLVM_INT8PTR);
 
         if (pack) Basetype->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, Blocklen, false)), nextcompact);
         else      Basetype->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, Blocklen, false)), scattered);
 
         // Increment the compact ptr by Size(Basetype) * Blocklen
         compact_addr = Builder.CreateAdd(compact_addr, compact_bytes_to_stride);
-        nextcompact = Builder.CreateIntToPtr(compact_addr, INT8PTR);
+        nextcompact = Builder.CreateIntToPtr(compact_addr, LLVM_INT8PTR);
     }
 
     // Increment the loop index and test for loop exit
@@ -1269,9 +1257,9 @@ void HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* in
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Base address of the input buffer
-    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, INT64);
+    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, LLVM_INT64);
     Value* extend = constNode((long)this->getExtent());
-    Value* incount_64 = Builder.CreateZExt(incount, INT64);
+    Value* incount_64 = Builder.CreateZExt(incount, LLVM_INT64);
     Value* incount_expanded = Builder.CreateMul(incount_64, extend);
 
     // Loop
@@ -1280,12 +1268,12 @@ void HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* in
     Builder.CreateBr(LoopBB);
     Builder.SetInsertPoint(LoopBB);
 
-    PHINode *compact = Builder.CreatePHI(INT8PTR, 2, "compact");
+    PHINode *compact = Builder.CreatePHI(LLVM_INT8PTR, 2, "compact");
     compact->addIncoming(compactbuf, PreheaderBB);
-    PHINode* i = Builder.CreatePHI(INT64, 2, "i");
+    PHINode* i = Builder.CreatePHI(LLVM_INT64, 2, "i");
     i->addIncoming(constNode(0l), PreheaderBB);
 
-    Value* compact_addr = Builder.CreatePtrToInt(compact, INT64);
+    Value* compact_addr = Builder.CreatePtrToInt(compact, LLVM_INT64);
 
     // OPT: Make this the loop counter
     Value* scattered_disp_base = Builder.CreateAdd(scatteredbuf_orig_int, i);
@@ -1295,7 +1283,7 @@ void HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* in
         // Set the scattered ptr to scattered_disp_base + this->Disl[i]
         Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
         Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
-        Value* scattered = Builder.CreateIntToPtr(scattered_disp, INT8PTR);
+        Value* scattered = Builder.CreateIntToPtr(scattered_disp, LLVM_INT8PTR);
 
         if (pack) Basetype->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), nextcompact);
         else      Basetype->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), scattered);
@@ -1303,7 +1291,7 @@ void HIndexedDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* in
         // Increment the compact ptr by Size(Basetype) * Blocklen
         Value* compact_bytes_to_stride = constNode((long)Basetype->getSize() * this->Blocklen[i]);
         compact_addr = Builder.CreateAdd(compact_addr, compact_bytes_to_stride);
-        nextcompact = Builder.CreateIntToPtr(compact_addr, INT8PTR);
+        nextcompact = Builder.CreateIntToPtr(compact_addr, LLVM_INT8PTR);
     }
 
     // Increment the loop index and test for loop exit
@@ -1400,9 +1388,9 @@ void StructDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* inco
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Base address of the input buffer
-    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, INT64);
+    Value* scatteredbuf_orig_int = Builder.CreatePtrToInt(scatteredbuf, LLVM_INT64);
     Value* extend = constNode((long)this->getExtent());
-    Value* incount_64 = Builder.CreateZExt(incount, INT64);
+    Value* incount_64 = Builder.CreateZExt(incount, LLVM_INT64);
     Value* incount_expanded = Builder.CreateMul(incount_64, extend);
 
     // Loop
@@ -1411,12 +1399,12 @@ void StructDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* inco
     Builder.CreateBr(LoopBB);
     Builder.SetInsertPoint(LoopBB);
 
-    PHINode *compact = Builder.CreatePHI(INT8PTR, 2, "compact");
+    PHINode *compact = Builder.CreatePHI(LLVM_INT8PTR, 2, "compact");
     compact->addIncoming(compactbuf, PreheaderBB);
-    PHINode* i = Builder.CreatePHI(INT64, 2, "i");
+    PHINode* i = Builder.CreatePHI(LLVM_INT64, 2, "i");
     i->addIncoming(constNode(0l), PreheaderBB);
 
-    Value* compact_addr = Builder.CreatePtrToInt(compact, INT64);
+    Value* compact_addr = Builder.CreatePtrToInt(compact, LLVM_INT64);
 
     // OPT: Make this the loop counter
     Value* scattered_disp_base = Builder.CreateAdd(scatteredbuf_orig_int, i);
@@ -1426,7 +1414,7 @@ void StructDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* inco
         // Set the scattered ptr to scattered_disp_base + this->Disl[i]
         Value* displ_i = ConstantInt::get(getGlobalContext(), APInt(64, this->Displ[i], false));
         Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
-        Value* scattered = Builder.CreateIntToPtr(scattered_disp, INT8PTR);
+        Value* scattered = Builder.CreateIntToPtr(scattered_disp, LLVM_INT8PTR);
 
         if (pack) Types[i]->Codegen_Pack(scattered, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), nextcompact);
         else      Types[i]->Codegen_Unpack(nextcompact, ConstantInt::get(getGlobalContext(), APInt(32, this->Blocklen[i], false)), scattered);
@@ -1434,7 +1422,7 @@ void StructDatatype::Codegen(Value *compactbuf, Value *scatteredbuf, Value* inco
         // Increment the compact ptr by Size(Basetype) * Blocklen
         Value* compact_bytes_to_stride = constNode((long)Types[i]->getSize() * this->Blocklen[i]);
         compact_addr = Builder.CreateAdd(compact_addr, compact_bytes_to_stride);
-        nextcompact = Builder.CreateIntToPtr(compact_addr, INT8PTR);
+        nextcompact = Builder.CreateIntToPtr(compact_addr, LLVM_INT8PTR);
     }
 
     // Increment the loop index and test for loop exit
@@ -1537,9 +1525,9 @@ void generate_pack_function(Datatype* ddt) {
     F->dump();
 
     std::vector<Type *> arg_type;
-    arg_type.push_back(INT8PTR);
-    arg_type.push_back(INT8PTR);
-    arg_type.push_back(INT64);
+    arg_type.push_back(LLVM_INT8PTR);
+    arg_type.push_back(LLVM_INT8PTR);
+    arg_type.push_back(LLVM_INT64);
     Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
     memcopy->dump();
 
@@ -1593,9 +1581,9 @@ void generate_unpack_function(Datatype* ddt) {
     F->dump();
 
     std::vector<Type *> arg_type;
-    arg_type.push_back(INT8PTR);
-    arg_type.push_back(INT8PTR);
-    arg_type.push_back(INT64);
+    arg_type.push_back(LLVM_INT8PTR);
+    arg_type.push_back(LLVM_INT8PTR);
+    arg_type.push_back(LLVM_INT64);
     Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
     memcopy->dump();
 
@@ -1685,10 +1673,10 @@ void DDT_Init() {
 
     // Initialize some types used by all packers
     std::vector<Type*> FuncArgs;
-    FuncArgs.push_back(INT8PTR);
-    FuncArgs.push_back(INT32);
-    FuncArgs.push_back(INT8PTR);
-    FT = FunctionType::get(VOID, FuncArgs, false);
+    FuncArgs.push_back(LLVM_INT8PTR);
+    FuncArgs.push_back(LLVM_INT32);
+    FuncArgs.push_back(LLVM_INT8PTR);
+    FT = FunctionType::get(LLVM_VOID, FuncArgs, false);
 
     Args.push_back("inbuf");
     Args.push_back("count");
