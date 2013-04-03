@@ -25,9 +25,9 @@ then
     exit 1
 fi
 
-rm ../../*.o
+rm -f ../../ddt_jit.o
 LLVM_OUTPUT=1 make vector_pack
-rm ../../*.o
+rm -f ../../ddt_jit.o
 
 N="$1-$2-$3-$4.ll"
 
