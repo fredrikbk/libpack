@@ -380,7 +380,7 @@ PrimitiveDatatype* PrimitiveDatatype::Clone() {
     return t_new;
 }
 
-static void vmove(Value *dst, Value *src, int count, llvm::Type *elemtype) {
+static inline void vmove(Value *dst, Value *src, int count, llvm::Type *elemtype) {
 	llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, count));
 	Value *in_vec = Builder.CreateBitCast(src, elemvectype_ptr, "in2_addr_vec");
 	Value *out_vec = Builder.CreateBitCast(dst, elemvectype_ptr, "out2_addr_vec");
@@ -388,7 +388,7 @@ static void vmove(Value *dst, Value *src, int count, llvm::Type *elemtype) {
 	Builder.CreateAlignedStore(elems, out_vec, 1);
 }
 
-static Value *incrementPtr(Value *ptr, int byteInc) {
+static inline Value *incrementPtr(Value *ptr, int byteInc) {
 	Value *addr = Builder.CreatePtrToInt(ptr, LLVM_INT64);
 	Value *newaddr = Builder.CreateAdd(addr, Builder.getInt64(byteInc));
 	return Builder.CreateIntToPtr(newaddr, LLVM_INT8PTR);
@@ -765,7 +765,7 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 		#endif
 
 		#ifndef ELEM_LOOP_TRESHOLD
-		#define ELEM_LOOP_TRESHOLD 0
+		#define ELEM_LOOP_TRESHOLD 128
 		#endif
 
 		assert((SIMD_BYTE_SIZE & (SIMD_BYTE_SIZE-1)) == 0); // Assert power-of-two
@@ -842,7 +842,6 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 			}
 			incount_val -= veccount * vecsize;
 		}
-		
 
 #elif PACKVAR == 9
 		int size_to_pack = this->getSize() * incount_ci->getSExtValue();
