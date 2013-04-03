@@ -744,43 +744,58 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 			assert(false);
 		}
 		assert(elemtype != NULL);
-		llvm::Type *elemtype_ptr = PointerType::getUnqual(elemtype);
-		llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, 2));
+
+		// This should be a power of two
+		#define VECTOR_BYTE_SIZE 32
+
+		assert((VECTOR_BYTE_SIZE & (VECTOR_BYTE_SIZE-1)) == 0); // Assert power-of-two
+		assert((VECTOR_BYTE_SIZE % this->Size) == 0);
+		const int vector_size = VECTOR_BYTE_SIZE / this->Size;
+		assert((vector_size & (vector_size-1)) == 0); // Assert power-of-two
 
 		int incount_val = incount_ci->getSExtValue();
 
-		// If we are packing an odd number then move one element first
-		if (incount_val % 2) {
-			Value *in_ptr = Builder.CreateBitCast(inbuf, elemtype_ptr, "in2_addr");
-			Value *out_ptr = Builder.CreateBitCast(outbuf, elemtype_ptr, "out2_addr");
-			Value *elem = Builder.CreateLoad(in_ptr, "elem");
-			Builder.CreateStore(elem, out_ptr);
-
-    		Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-    		Value *in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size));
-    		inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
-
-    		Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
-    		Value *out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(this->Size));
-    		outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
-
-			incount_val--;
-		}
-
-		assert(!(incount_val % 2));
-		for (int i=0; i<incount_val; i+=2) {
+		// Copy vectors of size vecsize
+		const int vector_count = incount_val / vector_size;
+		llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, vector_size));
+		for (int i=0; i<vector_count; i++) {
 			Value *in_vec = Builder.CreateBitCast(inbuf, elemvectype_ptr, "in2_addr_vec");
 			Value *out_vec = Builder.CreateBitCast(outbuf, elemvectype_ptr, "out2_addr_vec");
 			Value *elems = Builder.CreateAlignedLoad(in_vec, 1, "elems");
 			Builder.CreateAlignedStore(elems, out_vec, 1);
 
-    		Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-    		Value *in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * 2));
-    		inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
+			Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+			Value *in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * vector_size));
+			inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 
-    		Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
-    		Value *out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(this->Size * 2));
-    		outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
+			Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
+			Value *out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(this->Size * vector_size));
+			outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
+		}
+		incount_val -= vector_count * vector_size;
+
+
+		// Postamble: copy the overflow elements that did not fit in full vector
+		for (int vecsize=vector_size/2; vecsize > 0; vecsize /= 2) {
+			const int veccount = incount_val / vecsize;
+			llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, vecsize));
+
+			for (int i=0; i<veccount; i++) {
+				Value *in_vec = Builder.CreateBitCast(inbuf, elemvectype_ptr, "in2_addr_vec");
+				Value *out_vec = Builder.CreateBitCast(outbuf, elemvectype_ptr, "out2_addr_vec");
+				Value *elems = Builder.CreateAlignedLoad(in_vec, 1, "elems");
+				Builder.CreateAlignedStore(elems, out_vec, 1);
+
+				Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+				Value *in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * vecsize));
+				inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
+
+				Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
+				Value *out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(this->Size * vecsize));
+				outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
+			}
+
+			incount_val -= veccount * vecsize;
 		}
 
 #elif PACKVAR == 9
