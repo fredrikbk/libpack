@@ -746,7 +746,9 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 		assert(elemtype != NULL);
 
 		// This should be a power of two
-		#define VECTOR_BYTE_SIZE 32
+		#ifndef VECTOR_BYTE_SIZE
+		#define VECTOR_BYTE_SIZE 16
+		#endif
 
 		assert((VECTOR_BYTE_SIZE & (VECTOR_BYTE_SIZE-1)) == 0); // Assert power-of-two
 		assert((VECTOR_BYTE_SIZE % this->Size) == 0);
