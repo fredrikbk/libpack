@@ -1,3 +1,4 @@
+
 #include "ddt_jit.hpp"
 #include "pack.h"
 
@@ -394,68 +395,43 @@ static inline Value *incrementPtr(Value *ptr, int byteInc) {
 	return Builder.CreateIntToPtr(newaddr, LLVM_INT8PTR);
 }
 
-void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
-    // Three cases:
+static inline llvm::Type *toLLVMType(PrimitiveDatatype::PrimitiveType type) {
+	llvm::Type *elemtype = NULL;
+	switch (type) {
+	case PrimitiveDatatype::DOUBLE:
+		elemtype = LLVM_DOUBLE;
+		break;
+	case PrimitiveDatatype::INT:
+		elemtype = LLVM_INT;
+		break;
+	case PrimitiveDatatype::FLOAT:
+		elemtype = LLVM_FLOAT;
+		break;
+	case PrimitiveDatatype::BYTE:
+		elemtype = LLVM_INT8;
+		break;
+	case PrimitiveDatatype::CHAR:
+		elemtype = LLVM_INT8;
+		break;
+	default:
+		fprintf(stderr, "Type not supported");
+		assert(false);
+	}
+	assert(elemtype != NULL);
+	return elemtype;
+}
 
-    // 1. The value of count is not known to us (supplied at
-    //    pack/unpack time) This case is not very important.  We
-    //    should just call memcpy.
-    // 2. The value of count is known and a large number (larger than
-    //    PRIMITIVE_MEMCPY_CUTOFF)
-    // 3. The value of count is known and a small number (smaller than
-    //    PRIMTIVE_MEMCPY_CUTOFF)
-    //
-    // We don't know what to do for case 2 and 3.  We also don't know
-    // wheter we should only consider two cases for known counts, or
-    // whether there are three or even four ranges that should use
-    // different strategies.
-    //
-    // Promising options for known count values include:
-    // a. Call memcpy and hope llvm checks whether count is a constant
-    //    and lowers it to good code for us
-    // b. Generate vector code with unaligned loads and aligned
-    //    stores, with a preamble to copy data until the out ptr is
-    //    aligned.  We should only operate on vectors that are
-    //    smallish a pow-of-two (8 or 16 elements)
-    // c. Generate unaligned load/store vector code (b, but with
-    //    unaligned stores and no preamble)
-    // d. Generate aligned vector code with streaming stores (b,
-    //    stores using the nontemporal hint)
-    // e. Generate code that compiles to "rep mov"-like instructions,
-    //    where mov may be a memory to memory mov instruction.
-    //
-    // What should PRIMITIVE_MEMCPY_CUTOFF be?  What value generalizes
-    // well?  Do we even need generate different llvm IR for these two
-    // ranges?  Should there be more than two ranges?
-    //
-    // I suspect inlined b might work well for smallish counts (<=32
-    // elements).  For very small counts c might be better since it
-    // doesn't require the preamble.  For large counts a, d and e are
-    // top contenders.  e has a large warmup count.  d should allow a
-    // higher bw because it doesn't require store memory locations to
-    // be loaded into the cache.  Intel recommends considering it if
-    // the amount of copied data is larger than half the size of the
-    // last level cache and/or the stored data won't be used by the
-    // CPU for a while.  This option is very interesting since it
-    // doesn't flush client code's cached values.  However, I assume
-    // that the NIC reads the values directly from memory, and not
-    // through the cache.  e apparantly has a high warmup cost, but
-    // some sources say it should be pretty good for large memcopies.
-    // However, some sources say not all processors implement it well.
-    // 
-    // Note that all of the above (except from using memcpy for case 1
-    // are UNTESTED ASSUMPTIONS.  Don't implement any of this without
-    // first testing it.
+void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
 
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     llvm::ConstantInt* incount_ci = dyn_cast<llvm::ConstantInt>(incount);
     // Case 3
     if (incount_ci != NULL) {
+
 #if !PACKVAR
 #undef PACKVAR
 #define PACKVAR 8
 #endif
-
 
 // NOTE that most of these packvars don't work with unaligned memory
 // they are only here for benchmarking/comparing different variants
@@ -736,104 +712,99 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 
         }
 #elif PACKVAR == 8
-		llvm::Type *elemtype = NULL;
-		switch (this->Type) {
-		case DOUBLE:
-			elemtype = LLVM_DOUBLE;
-			break;
-		case INT:
-			elemtype = LLVM_INT;
-			break;
-		case FLOAT:
-			elemtype = LLVM_FLOAT;
-			break;
-		case BYTE:
-			elemtype = LLVM_INT8;
-			break;
-		case CHAR:
-			elemtype = LLVM_INT8;
-			break;
-		default:
-			fprintf(stderr, "Type not supported");
-			assert(false);
-		}
-		assert(elemtype != NULL);
+		// Kernel that performs unaligned memcopies using vector
+		// instructions.  The kernel copies as many elements as
+		// possible using vector instructions of a size specified by
+		// SIMD_BYTE_SIZE in a loop that is unrolled COPY_LOOP_UNROLL
+		// times.
+		//
+		// If the size of the elements is not divisible by
+		// SIMD_BYTE_SIZE then the overflow elements are copied using
+		// succesively smaller pow-of-two sized vector instructions in
+		// a postamble until all are copied.
+		//
+		// If the number of bytes to copy is less than
+		// COPY_LOOP_TRESHOLD then the code skips the loop creating
+		// all-together and falls through to the postamble generator,
+		// which produces fully unrolled code.
 
-		// This should be a power of two
+		// This should be a power of two (on kepler performance is bad
+		// with 32-byte simd)
 		#ifndef SIMD_BYTE_SIZE
 		#define SIMD_BYTE_SIZE 16
 		#endif
 
-		#ifndef ELEM_LOOP_TRESHOLD
-		#define ELEM_LOOP_TRESHOLD 128
+		// Number of bytes to allow before introducing a loop.
+		// Tip: Make this 4*8 times larger than COPY_LOOP_UNROLL for
+		// smooth double performance
+		#ifndef COPY_LOOP_TRESHOLD
+		#define COPY_LOOP_TRESHOLD 32*8
 		#endif
+
+		// Number of times to unroll the copy loop
+		#ifndef COPY_LOOP_UNROLL
+		#define COPY_LOOP_UNROLL 8
+		#endif
+
+		const int LOOP_ELEM_TRESHOLD = COPY_LOOP_TRESHOLD / this->Size;
+		const int vector_size = SIMD_BYTE_SIZE / this->Size;
 
 		assert((SIMD_BYTE_SIZE & (SIMD_BYTE_SIZE-1)) == 0); // Assert power-of-two
 		assert((SIMD_BYTE_SIZE % this->Size) == 0);
-		const int vector_size = SIMD_BYTE_SIZE / this->Size;
 		assert((vector_size & (vector_size-1)) == 0); // Assert power-of-two
+
+		llvm::Type *elemtype = toLLVMType(this->Type);
 
 		// Number of elements to copy
 		int incount_val = incount_ci->getSExtValue();
 
+		// Trunk to a multiple of the unroll factor
+		const int vectors_to_copy = ((incount_val / vector_size) / COPY_LOOP_UNROLL) * COPY_LOOP_UNROLL;
 
-		// Copy incount/vector_size vectors of size vecsize
-		const int vector_count = incount_val / vector_size;
-		llvm::Type *elemvectype_ptr = PointerType::getUnqual(VectorType::get(elemtype, vector_size));
+		// Copy vectors_to_copy  vectors of size vecsize.
+		// If the number of values is less than the LOOP_ELEM_TRESHOLD
+		// treshold then we fall through to the postamble and unroll
+		// everything
+		if (vectors_to_copy > 0 && incount_val >= LOOP_ELEM_TRESHOLD) {
+			Value *inbuf_int = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+			Value *exitval   = Builder.CreateAdd(inbuf_int, constNode((long)vectors_to_copy * SIMD_BYTE_SIZE), "exitval");
 
-		if (vector_count > 0) {
-			if (incount_val <= ELEM_LOOP_TRESHOLD) {
-				for (int i=0; i<vector_count; i++) {
-					vmove(outbuf, inbuf, vector_size, elemtype);
-					inbuf  = incrementPtr(inbuf, this->Size * vector_size);
-					outbuf = incrementPtr(outbuf, this->Size * vector_size);
-				}
-				incount_val -= vector_count * vector_size;
+			BasicBlock *header = Builder.GetInsertBlock();
+			BasicBlock *copyloop   = BasicBlock::Create(getGlobalContext(), "copyloop", TheFunction);
+			Builder.CreateBr(copyloop);
+			Builder.SetInsertPoint(copyloop);
+
+			PHINode *inphi = Builder.CreatePHI(LLVM_INT8PTR, 2, "in3");
+			inphi->addIncoming(inbuf, header);
+			PHINode *outphi  = Builder.CreatePHI(LLVM_INT8PTR, 2, "out3");
+			outphi->addIncoming(outbuf, header);
+			inbuf  = inphi;
+			outbuf = outphi;
+
+			Value *in_addr = NULL;
+			for (int i=0; i<COPY_LOOP_UNROLL; i++) {
+				vmove(outbuf, inbuf, vector_size, elemtype);
+
+				Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
+				in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * vector_size));
+				inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
+
+				outbuf = incrementPtr(outbuf, this->Size * vector_size);
 			}
-			else {
-				Value *inbuf_int = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-				Value *exitval   = Builder.CreateAdd(inbuf_int, constNode((long)vector_count * SIMD_BYTE_SIZE), "exitval");
+			incount_val -= vectors_to_copy * vector_size;
 
-				BasicBlock *header = Builder.GetInsertBlock();
-				BasicBlock *copyloop   = BasicBlock::Create(getGlobalContext(), "copyloop", TheFunction);
-				Builder.CreateBr(copyloop);
-				Builder.SetInsertPoint(copyloop);
+			inphi->addIncoming(inbuf, copyloop);
+			outphi->addIncoming(outbuf, copyloop);
 
-				PHINode *inphi = Builder.CreatePHI(LLVM_INT8PTR, 2, "in3");
-				inphi->addIncoming(inbuf, header);
-				PHINode *outphi  = Builder.CreatePHI(LLVM_INT8PTR, 2, "out3");
-				outphi->addIncoming(outbuf, header);
-				inbuf  = inphi;
-				outbuf = outphi;
-
-				Value *in_addr = NULL;
-				// for (int i=0; i<vector_count; i++) {
-					vmove(outbuf, inbuf, vector_size, elemtype);
-
-					Value *in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-					in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(this->Size * vector_size));
-					inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
-
-					Value *out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
-					Value *out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(this->Size * vector_size));
-					outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
-				// }
-				incount_val -= vector_count * vector_size;
-
-				inphi->addIncoming(inbuf, copyloop);
-				outphi->addIncoming(outbuf, copyloop);
-
-				// Create and jump to postamble
-				BasicBlock *copypostamble = BasicBlock::Create(getGlobalContext(), "copypostamble", TheFunction);
-				Value *exitcond = Builder.CreateICmpEQ(in_addr, exitval);
-				Builder.CreateCondBr(exitcond, copypostamble, copyloop);
-				Builder.SetInsertPoint(copypostamble);
-			}
+			// Create and jump to postamble
+			BasicBlock *copypostamble = BasicBlock::Create(getGlobalContext(), "copypostamble", TheFunction);
+			Value *exitcond = Builder.CreateICmpEQ(in_addr, exitval);
+			Builder.CreateCondBr(exitcond, copypostamble, copyloop);
+			Builder.SetInsertPoint(copypostamble);
 		}
 
-
 		// Copy postamble: copy the overflow elements that did not fit in full vector
-		for (int vecsize=vector_size/2; vecsize > 0; vecsize /= 2) {
+		for (int vecsize=vector_size; vecsize > 0; vecsize /= 2) {
 			const int veccount = incount_val / vecsize;
 			for (int i=0; i<veccount; i++) {
 				vmove(outbuf, inbuf, vecsize, elemtype);
@@ -842,38 +813,6 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
 			}
 			incount_val -= veccount * vecsize;
 		}
-
-#elif PACKVAR == 9
-		int size_to_pack = this->getSize() * incount_ci->getSExtValue();
-        llvm::Type* vectypeptr = PointerType::getUnqual(VectorType::get(Type::getDoubleTy(getGlobalContext()), 2));
-
-		while (size_to_pack > 0) {
-		
-			MDNode *Node = MDNode::get(getGlobalContext(), Builder.getInt32(1));
-			Value* out_vec = Builder.CreateBitCast(outbuf, vectypeptr, "out2_addr_vec");
-			Value* in_vec = Builder.CreateBitCast(inbuf, vectypeptr, "in2_addr_vec");
-			Value* bytes = Builder.CreateAlignedLoad(in_vec, 1, "bytes");
-			StoreInst* store = Builder.CreateAlignedStore(bytes, out_vec, 16);
-
-    		Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
-    		Value* out_addr = Builder.CreateAdd(out_addr_cvi,  Builder.getInt64(16));
-    		outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
-
-    		Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-    		Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(16));
-    		inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
-			
-			size_to_pack -= 16;
-		}
-
-		// revert changes to inbuf, outbuf
-    	Value* out_addr_cvi = Builder.CreatePtrToInt(outbuf, LLVM_INT64);
-    	Value* out_addr = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(-size_to_pack));
-    	outbuf = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
-
-    	Value* in_addr_cvi = Builder.CreatePtrToInt(inbuf, LLVM_INT64);
-    	Value* in_addr = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(-size_to_pack));
-    	inbuf = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);
 #else
 #error NO PACKVAR DEFINED
 #endif
