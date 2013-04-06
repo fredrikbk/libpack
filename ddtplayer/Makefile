@@ -24,7 +24,7 @@ $(FARCDIR)/ddt_jit.o: $(FARCDIR)/ddt_jit.cpp $(FARCDIR)/ddt_jit.hpp
 	$(CXX) -c -o $@ $< $(CPPFLAGS)
 
 parser: parser.y lexer.lex
-	bison -d -o parser.c parser.y
+	bison -d -o parser.cpp parser.y
 	flex -o lexer.c lexer.lex
 
 clean:
