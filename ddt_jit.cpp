@@ -4,6 +4,7 @@
 
 #include <map>
 #include <cstdio>
+#include <sstream>
 
 #if defined(LLVM_VERSION_MINOR)
 #error fpp
@@ -61,11 +62,11 @@ static double prof_time= 0.0;
 unsigned long long g_timerfreq;
 #endif
 
+using namespace std;
 using namespace llvm;
 
 namespace farc {
 
-static Function* func; // printf function for debugging
 static Module *TheModule;
 static IRBuilder<> Builder(getGlobalContext());
 static std::map<std::string, Value*> NamedValues;
@@ -88,6 +89,7 @@ FunctionType *FT;
 #define LLVM_DOUBLE   Type::getDoubleTy(getGlobalContext())
 
 /** for debugging **
+static Function* func; // printf function for debugging
 std::vector<llvm::Type*> printf_arg_types;
 printf_arg_types.push_back(LLVM_INT8PTR);
 FunctionType* printf_type = FunctionType::get(LLVM_INT32, printf_arg_types, true);
@@ -358,6 +360,13 @@ static void vectorCodegen(Value* inbuf, Value* incount, Value* outbuf, Datatype*
     }
     #endif
 }
+
+
+/* Datatype */
+void Datatype::print() {
+	printf("%s\n", this->toString().c_str());
+}
+
 
 /* PrimitiveDatatype */
 PrimitiveDatatype::PrimitiveDatatype(PrimitiveDatatype::PrimitiveType type) : Datatype() {
@@ -821,7 +830,7 @@ void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf
     // Case 1 and 2
     else {
 		Value* contig_extend = multNode(this->getSize(), incount);
-        Value* memcopy = Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
+        Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
     }
 
 }
@@ -839,27 +848,29 @@ int PrimitiveDatatype::getSize() {
     return this->Size;
 }
 
-void PrimitiveDatatype::print(std::string indent) {
+string PrimitiveDatatype::toString() {
+	string res = "";
     switch (this->Type) {
     case BYTE:
-        fprintf(stderr, "%sbyte\n", indent.c_str());
+        res.append("byte");
         break;
     case CHAR:
-        fprintf(stderr, "%schar\n", indent.c_str());
+        res.append("char");
         break;
     case DOUBLE:
-        fprintf(stderr, "%sdouble\n", indent.c_str());
+        res.append("double");
         break;
     case FLOAT:
-        fprintf(stderr, "%sfloat\n", indent.c_str());
+        res.append("float");
         break;
     case INT:
-        fprintf(stderr, "%sint\n", indent.c_str());
+        res.append("int");
         break;
     default:
-        fprintf(stderr, "%sN/A\n", indent.c_str());
+        res.append("N/A");
         break;
     }
+	return res;
 }
 
 /* Value* PrimitiveDatatype::Codegen_Pack_partial(Value* inbuf, Value* incount, Value* outbuf, Value* outbuf_from, Value* outbuf_to) {
@@ -993,9 +1004,10 @@ int ContiguousDatatype::getSize() {
     return this->Count * this->Basetype->getSize();
 }
 
-void ContiguousDatatype::print(std::string indent) {
-    printf("%scontiguous(count=%d)\n", indent.c_str(), this->Count);
-    Basetype->print(indent+indent_str);
+string ContiguousDatatype::toString() {
+	stringstream res;
+	res << "ctg(" << this->Count << ")[" << Basetype->toString() << "]";
+	return res.str();
 }
 
 
@@ -1041,9 +1053,10 @@ int VectorDatatype::getSize() {
     return this->Count * this->Blocklen*this->Basetype->getSize();
 }
 
-void VectorDatatype::print(std::string indent) {
-    fprintf(stderr, "%svector(count=%d, blocklen=%d, stride=%d)\n", indent.c_str(), this->Count, this->Blocklen, this->Stride);
-    Basetype->print(indent+indent_str);
+string VectorDatatype::toString() {
+	stringstream res;
+	res << "vec(" << this->Count << " " << this->Blocklen << " " << this->Stride << ")[" << Basetype->toString() << "]";
+	return res.str();
 }
 
 
@@ -1089,9 +1102,10 @@ int HVectorDatatype::getSize() {
     return this->Count * this->Blocklen*this->Basetype->getSize();
 }
 
-void HVectorDatatype::print(std::string indent) {
-    fprintf(stderr, "%shvector(count=%d, blocklen=%d, stride=%d)\n", indent.c_str(), this->Count, this->Blocklen, this->Stride);
-    Basetype->print(indent+indent_str);
+string HVectorDatatype::toString() {
+	stringstream res;
+	res << "hvec(" << this->Count << " " << this->Blocklen << " " << this->Stride << ")[" << Basetype->toString() << "]";
+	return res.str();
 }
 
 
@@ -1219,12 +1233,17 @@ int IndexedBlockDatatype::getSize() {
 
 }
 
-void IndexedBlockDatatype::print(std::string indent) {
-    fprintf(stderr, "%shindexed(count=%d, blocklen=%d)\n", indent.c_str(), this->Count, this->Blocklen);
-    for (int i=0; i<Displ.size(); i++) {
-        fprintf(stderr, "%s(displ=%d)\n", (indent+indent_str).c_str(), Displ[i]);
+string IndexedBlockDatatype::toString() {
+	stringstream res;
+	res << "idxb(" << this->Count << " " << this->Blocklen << ")[";
+    for (unsigned int i=0; i<Displ.size(); i++) {
+		res << Displ[i];
+		if (i <Displ.size() - 1) {
+			res << " ";
+		}
     }
-    Basetype->print(indent+indent_str+indent_str);
+	res << "]{" << Basetype->toString() << "}";
+	return res.str();
 }
 
 
@@ -1349,12 +1368,17 @@ int HIndexedDatatype::getSize() {
 
 }
 
-void HIndexedDatatype::print(std::string indent) {
-    fprintf(stderr, "%shindexed(count=%d)\n", indent.c_str(), this->Count);
-    for (int i=0; i<Displ.size(); i++) {
-        fprintf(stderr, "%s(displ=%ld, blocklen=%d)\n", (indent+indent_str).c_str(), Displ[i], Blocklen[i]);
+string HIndexedDatatype::toString() {
+	stringstream res;
+	res << "hidx(" << this->Count << ")[";
+    for (unsigned int i=0; i<Displ.size(); i++) {
+		res << Displ[i] << "," << Blocklen[i];
+		if (i <Displ.size() - 1) {
+			res << " ";
+		}
     }
-    Basetype->print(indent+indent_str+indent_str);
+	res << "]{" << Basetype->toString() << "}";
+	return res.str();
 }
 
 
@@ -1477,12 +1501,17 @@ int StructDatatype::getSize() {
 
 }
 
-void StructDatatype::print(std::string indent) {
-    fprintf(stderr, "%shindexed(count=%d)\n", indent.c_str(), this->Count);
-    for (int i=0; i<Displ.size(); i++) {
-        fprintf(stderr, "%s(displ=%ld, blocklen=%d)\n", (indent+indent_str).c_str(), Displ[i], Blocklen[i]);
-        Types[i]->print(indent+indent_str+indent_str);
+string StructDatatype::toString() {
+	stringstream res;
+	res << "struct(" << this->Count << ")";
+    for (unsigned int i=0; i<Displ.size(); i++) {
+		res << "[" << this->Displ[i] << "," << this->Blocklen[i] << "]";
+		res << "{" << this->Types[i]->toString() << "}";
+		if (i <Displ.size() - 1) {
+			res << " ";
+		}
     }
+	return res.str();
 }
 
 

@@ -49,16 +49,18 @@
      RB = 265,
      LC = 266,
      RC = 267,
-     CONTIGUOUS = 268,
-     VECTOR = 269,
-     HVECTOR = 270,
-     HINDEXED = 271,
-     STRUCT = 272,
-     BYTE_ = 273,
-     CHAR_ = 274,
-     INT_ = 275,
-     DOUBLE_ = 276,
-     FLOAT_ = 277
+     COL = 268,
+     COMMA = 269,
+     CONTIGUOUS = 270,
+     VECTOR = 271,
+     HVECTOR = 272,
+     HINDEXED = 273,
+     STRUCT = 274,
+     BYTE_ = 275,
+     CHAR_ = 276,
+     INT_ = 277,
+     DOUBLE_ = 278,
+     FLOAT_ = 279
    };
 #endif
 
@@ -77,7 +79,7 @@ typedef union YYSTYPE
 
 
 /* Line 1676 of yacc.c  */
-#line 81 "parser.hpp"
+#line 83 "parser.hpp"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

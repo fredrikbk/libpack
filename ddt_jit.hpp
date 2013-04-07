@@ -43,7 +43,8 @@ class Datatype {
     virtual void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     virtual int getExtent() = 0;
     virtual int getSize() = 0;
-    virtual void print(std::string indent) = 0;
+	virtual std::string toString() = 0;
+    virtual void print();
 
     void (*packer)(void*, int, void*);
     void (*unpacker)(void*, int, void*);
@@ -69,9 +70,8 @@ class PrimitiveDatatype : public Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
-    void print(std::string indent);
+    std::string toString();
     PrimitiveDatatype* Clone();
-
 };
 
 /* Class for contiguous types */
@@ -88,7 +88,7 @@ class ContiguousDatatype : public Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
-    void print(std::string indent);
+    std::string toString();
     ContiguousDatatype* Clone();
 
 };
@@ -108,7 +108,7 @@ class VectorDatatype : public Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
-    void print(std::string indent);
+    std::string toString();
     VectorDatatype* Clone();
 
 };
@@ -128,7 +128,7 @@ class HVectorDatatype : public Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
-    void print(std::string indent);
+    std::string toString();
     HVectorDatatype* Clone();
 
 };
@@ -149,7 +149,7 @@ class IndexedBlockDatatype : public Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
-    void print(std::string indent);
+    std::string toString();
     IndexedBlockDatatype* Clone();
 
 };
@@ -170,7 +170,7 @@ class HIndexedDatatype : public Datatype {
     void Codegen_Unpack(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     int getExtent();
     int getSize();
-    void print(std::string indent);
+    std::string toString();
     HIndexedDatatype* Clone();
 
 };
@@ -191,7 +191,7 @@ class StructDatatype : public Datatype {
     void Codegen(llvm::Value *compactbuf, llvm::Value *scatteredbuf, llvm::Value* incount, bool pack);
     int getExtent();
     int getSize();
-    void print(std::string indent);
+    std::string toString();
     StructDatatype* Clone();
 
 };

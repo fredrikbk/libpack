@@ -41,7 +41,7 @@ vector<Datatype*> datatypes;
 };
 
 %token <val> NUM
-%token <sym> UNKNOWN SUBTYPE ELEM LP RP LB RB LC RC
+%token <sym> UNKNOWN SUBTYPE ELEM LP RP LB RB LC RC COL COMMA
 %token <sym> CONTIGUOUS VECTOR HVECTOR HINDEXED STRUCT
 %token <sym> BYTE_ CHAR_ INT_ DOUBLE_ FLOAT_
 
