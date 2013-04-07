@@ -1,5 +1,5 @@
 %{
-#include "parser.h"
+#include "parser.hpp"
 #define YY_NO_UNPUT
 
 %}
@@ -8,25 +8,31 @@ digit         [0-9]
 letter        [a-zA-Z]
 
 %%
-"byte"               { return BYTE; }
-"char"               { return CHAR; }
-"int"                { return INT; }
-"double"             { return DOUBLE; }
-"float"              { return FLOAT; }
+"byte"               { return BYTE_; }
+"char"               { return CHAR_; }
+"int"                { return INT_; }
+"double"             { return DOUBLE_; }
+"float"              { return FLOAT_; }
 
-"contiguous"         { return CONTIGUOUS; }
-"vector"             { return VECTOR; }
-"hvector"            { return HVECTOR; }
-"hindexed"           { return HINDEXED; }
+"ctg"                { return CONTIGUOUS; }
+"vec"                { return VECTOR; }
+"hvec"               { return HVECTOR; }
+"hidx"               { return HINDEXED; }
 
 [-]                  { return ELEM; }
 
 {digit}+|-{digit}+   { yylval.val = atoi(yytext); return NUM; }
 
+[\(]                 { return LP; }
+[\)]                 { return RP; }
 [\[]                 { return LB; }
 [\]]                 { return RB; }
+[\{]                 { return LC; }
+[\}]                 { return RC; }
+[:]                  { return COL; }
+[,]                  { return COMMA; }
 
-[ \t\n\r]                  /* skip whitespace */
+[ \t\n\r]            /* skip whitespace */
 .                    { printf("Unknown character [%c]\n", yytext[0]); return UNKNOWN; }
 %%
 

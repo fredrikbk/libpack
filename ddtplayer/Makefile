@@ -18,7 +18,7 @@ ddtplayer: $(OBJECTS)
 all: parser ddtplayer
 
 $(FARCDIR)/ddt_jit.o: $(FARCDIR)/ddt_jit.cpp $(FARCDIR)/ddt_jit.hpp
-	make -C ../../ ddt_jit.o
+	make -C $(FARCDIR) ddt_jit.o
 
 %.o: %.cpp
 	$(CXX) -c -o $@ $< $(CPPFLAGS)
