@@ -129,7 +129,6 @@ extern "C" int yylex (void);
 void yyerror(const char *);
 
 unsigned long long g_timerfreq;
-HRT_TIMESTAMP_T start, stop;
 
 struct Datatype {
 	farc::Datatype *farc;
@@ -160,13 +159,13 @@ vector<Datatype*> datatypes;
 
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 typedef union YYSTYPE
-#line 38 "parser.y"
+#line 37 "parser.y"
 {
 	int val;
 	struct Datatype *datatype;
 }
 /* Line 193 of yacc.c.  */
-#line 170 "parser.cpp"
+#line 169 "parser.cpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
@@ -179,7 +178,7 @@ typedef union YYSTYPE
 
 
 /* Line 216 of yacc.c.  */
-#line 183 "parser.cpp"
+#line 182 "parser.cpp"
 
 #ifdef short
 # undef short
@@ -468,8 +467,8 @@ static const yytype_int8 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    54,    54,    55,    59,    65,    66,    70,    75,    80,
-      85,    90,    98,    99,   100,   105,   113,   121
+       0,    53,    53,    54,    58,    64,    65,    69,    74,    79,
+      84,    89,    97,    98,    99,   104,   112,   120
 };
 #endif
 
@@ -1390,14 +1389,14 @@ yyreduce:
   switch (yyn)
     {
         case 4:
-#line 59 "parser.y"
+#line 58 "parser.y"
     {
 	datatypes.push_back((yyvsp[(1) - (1)].datatype));
 ;}
     break;
 
   case 7:
-#line 70 "parser.y"
+#line 69 "parser.y"
     {
 	(yyval.datatype) = new Datatype;
 	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::BYTE);
@@ -1406,7 +1405,7 @@ yyreduce:
     break;
 
   case 8:
-#line 75 "parser.y"
+#line 74 "parser.y"
     {
 	(yyval.datatype) = new Datatype;
 	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::CHAR);
@@ -1415,7 +1414,7 @@ yyreduce:
     break;
 
   case 9:
-#line 80 "parser.y"
+#line 79 "parser.y"
     {
 	(yyval.datatype) = new Datatype;
 	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
@@ -1424,7 +1423,7 @@ yyreduce:
     break;
 
   case 10:
-#line 85 "parser.y"
+#line 84 "parser.y"
     {
 	(yyval.datatype) = new Datatype;
 	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::FLOAT);
@@ -1433,7 +1432,7 @@ yyreduce:
     break;
 
   case 11:
-#line 90 "parser.y"
+#line 89 "parser.y"
     {
 	(yyval.datatype) = new Datatype;
 	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
@@ -1442,7 +1441,7 @@ yyreduce:
     break;
 
   case 15:
-#line 105 "parser.y"
+#line 104 "parser.y"
     {
 	(yyval.datatype) = (yyvsp[(6) - (7)].datatype);
 	(yyval.datatype)->farc = new farc::ContiguousDatatype((yyvsp[(6) - (7)].datatype)->farc, (yyvsp[(3) - (7)].val));
@@ -1451,7 +1450,7 @@ yyreduce:
     break;
 
   case 16:
-#line 113 "parser.y"
+#line 112 "parser.y"
     { 
 	(yyval.datatype) = (yyvsp[(8) - (9)].datatype);
 	(yyval.datatype)->farc = new farc::VectorDatatype((yyvsp[(8) - (9)].datatype)->farc, (yyvsp[(3) - (9)].val), (yyvsp[(4) - (9)].val), (yyvsp[(5) - (9)].val));
@@ -1460,7 +1459,7 @@ yyreduce:
     break;
 
   case 17:
-#line 121 "parser.y"
+#line 120 "parser.y"
     {
 	(yyval.datatype) = (yyvsp[(8) - (9)].datatype);
 	(yyval.datatype)->farc = new farc::HVectorDatatype((yyvsp[(8) - (9)].datatype)->farc, (yyvsp[(3) - (9)].val), (yyvsp[(4) - (9)].val), (yyvsp[(5) - (9)].val));
@@ -1470,7 +1469,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 1474 "parser.cpp"
+#line 1473 "parser.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -1684,7 +1683,7 @@ yyreturn:
 }
 
 
-#line 134 "parser.y"
+#line 133 "parser.y"
 
 
 void yyerror(const char *s) {
@@ -1728,8 +1727,25 @@ int compare_buffers(size_t size, void *mpi, void *farc) {
 #define ALIGNMENT 1
 #define WARMUP  5
 #define NUMRUNS 10
-void produce_report() {
 
+#define TIME_HOT(code, median)                         \
+do {                                                   \
+	HRT_TIMESTAMP_T start, stop;                       \
+	std::vector<uint64_t> times (NUMRUNS, 0);          \
+	for (unsigned int i=0; i<WARMUP; i++) {            \
+		code;                                          \
+	}                                                  \
+	for (unsigned int i=0; i<NUMRUNS; i++) {           \
+		HRT_GET_TIMESTAMP(start);                      \
+		code;                                          \
+		HRT_GET_TIMESTAMP(stop);                       \
+		HRT_GET_ELAPSED_TICKS(start, stop, &times[i]); \
+	}                                                  \
+	std::sort(times.begin(), times.end());             \
+	median = HRT_GET_USEC(times[NUMRUNS/2]);           \
+} while(0)
+
+void produce_report() {
 	// Find text widths
 	int name_w        = 0;
 	int size_w        = 9;
@@ -1759,6 +1775,8 @@ void produce_report() {
 	
 	// Produce report
 	for (unsigned int i=0; i<datatypes.size(); i++) {
+		HRT_TIMESTAMP_T start, stop;
+
 		Datatype *datatype = datatypes[i];
 
 		double mpi_commit_time   = 0.0;
@@ -1783,64 +1801,20 @@ void produce_report() {
 
 
 		// mpi_commit
-		for (unsigned int i=0; i<WARMUP; i++) {
-			MPI_Type_commit(&(datatype->mpi));
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			MPI_Type_commit(&(datatype->mpi));
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &mpi_commit_time);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		mpi_commit_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT( MPI_Type_commit(&(datatype->mpi)), mpi_commit_time );
 
 		// farc_commit
-		for (unsigned int i=0; i<WARMUP; i++) {
-			DDT_Commit(datatype->farc);
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			DDT_Commit(datatype->farc);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		farc_commit_time = HRT_GET_USEC(times[NUMRUNS/2]);
-
+		TIME_HOT( DDT_Commit(datatype->farc), farc_commit_time );
 
 		// mpi_pack
 		init_buffer(extent, mpi_bigbuf, true);
 		init_buffer(size, mpi_smallbuf, false);
-		for (unsigned int i=0; i<WARMUP; i++) {
-			int pos = 0;
-			MPI_Pack(mpi_bigbuf, 1, datatype->mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			int pos = 0;
-			MPI_Pack(mpi_bigbuf, 1, datatype->mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		mpi_pack_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf, 1, datatype->mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
 
 		// farc pack
 		init_buffer(extent, farc_bigbuf, true);
 		init_buffer(size, farc_smallbuf, false);
-		for (unsigned int i=0; i<WARMUP; i++) {
-			DDT_Pack(farc_bigbuf, farc_smallbuf, datatype->farc, 1);
-	   	}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			DDT_Pack(farc_bigbuf, farc_smallbuf, datatype->farc, 1);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		farc_pack_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT( DDT_Pack(farc_bigbuf, farc_smallbuf, datatype->farc, 1), farc_pack_time);
 
 		// verify
 		if (compare_buffers(extent, mpi_bigbuf, farc_bigbuf) != 0) {
@@ -1856,34 +1830,12 @@ void produce_report() {
 		// mpi_unpack
 		init_buffer(size, mpi_smallbuf, true);
 		init_buffer(extent, mpi_bigbuf, false);
-		for (unsigned int i=0; i<WARMUP; i++) {
-			int pos = 0;
-			MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype->mpi, MPI_COMM_WORLD);
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			int pos = 0;
-			MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype->mpi, MPI_COMM_WORLD);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		mpi_unpack_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT( {int pos=0; MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype->mpi, MPI_COMM_WORLD);}, mpi_unpack_time);
 
 		// farc unpack
 		init_buffer(size, farc_smallbuf, true);
 		init_buffer(extent, farc_bigbuf, false);
-		for (unsigned int i=0; i<WARMUP; i++) {
-			DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype->farc, 1);
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype->farc, 1);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		farc_unpack_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT(DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype->farc, 1), farc_unpack_time);
 
 		// verify
 		if (compare_buffers(size, mpi_smallbuf, farc_smallbuf) != 0) {
@@ -1942,5 +1894,4 @@ int main(int argc, char **argv) {
 
 	fclose(yyin);
 }
-
 

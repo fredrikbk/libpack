@@ -24,7 +24,6 @@ extern "C" int yylex (void);
 void yyerror(const char *);
 
 unsigned long long g_timerfreq;
-HRT_TIMESTAMP_T start, stop;
 
 struct Datatype {
 	farc::Datatype *farc;
@@ -174,8 +173,25 @@ int compare_buffers(size_t size, void *mpi, void *farc) {
 #define ALIGNMENT 1
 #define WARMUP  5
 #define NUMRUNS 10
-void produce_report() {
 
+#define TIME_HOT(code, median)                         \
+do {                                                   \
+	HRT_TIMESTAMP_T start, stop;                       \
+	std::vector<uint64_t> times (NUMRUNS, 0);          \
+	for (unsigned int i=0; i<WARMUP; i++) {            \
+		code;                                          \
+	}                                                  \
+	for (unsigned int i=0; i<NUMRUNS; i++) {           \
+		HRT_GET_TIMESTAMP(start);                      \
+		code;                                          \
+		HRT_GET_TIMESTAMP(stop);                       \
+		HRT_GET_ELAPSED_TICKS(start, stop, &times[i]); \
+	}                                                  \
+	std::sort(times.begin(), times.end());             \
+	median = HRT_GET_USEC(times[NUMRUNS/2]);           \
+} while(0)
+
+void produce_report() {
 	// Find text widths
 	int name_w        = 0;
 	int size_w        = 9;
@@ -205,6 +221,8 @@ void produce_report() {
 	
 	// Produce report
 	for (unsigned int i=0; i<datatypes.size(); i++) {
+		HRT_TIMESTAMP_T start, stop;
+
 		Datatype *datatype = datatypes[i];
 
 		double mpi_commit_time   = 0.0;
@@ -229,64 +247,20 @@ void produce_report() {
 
 
 		// mpi_commit
-		for (unsigned int i=0; i<WARMUP; i++) {
-			MPI_Type_commit(&(datatype->mpi));
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			MPI_Type_commit(&(datatype->mpi));
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &mpi_commit_time);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		mpi_commit_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT( MPI_Type_commit(&(datatype->mpi)), mpi_commit_time );
 
 		// farc_commit
-		for (unsigned int i=0; i<WARMUP; i++) {
-			DDT_Commit(datatype->farc);
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			DDT_Commit(datatype->farc);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		farc_commit_time = HRT_GET_USEC(times[NUMRUNS/2]);
-
+		TIME_HOT( DDT_Commit(datatype->farc), farc_commit_time );
 
 		// mpi_pack
 		init_buffer(extent, mpi_bigbuf, true);
 		init_buffer(size, mpi_smallbuf, false);
-		for (unsigned int i=0; i<WARMUP; i++) {
-			int pos = 0;
-			MPI_Pack(mpi_bigbuf, 1, datatype->mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			int pos = 0;
-			MPI_Pack(mpi_bigbuf, 1, datatype->mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		mpi_pack_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf, 1, datatype->mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
 
 		// farc pack
 		init_buffer(extent, farc_bigbuf, true);
 		init_buffer(size, farc_smallbuf, false);
-		for (unsigned int i=0; i<WARMUP; i++) {
-			DDT_Pack(farc_bigbuf, farc_smallbuf, datatype->farc, 1);
-	   	}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			DDT_Pack(farc_bigbuf, farc_smallbuf, datatype->farc, 1);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		farc_pack_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT( DDT_Pack(farc_bigbuf, farc_smallbuf, datatype->farc, 1), farc_pack_time);
 
 		// verify
 		if (compare_buffers(extent, mpi_bigbuf, farc_bigbuf) != 0) {
@@ -302,34 +276,12 @@ void produce_report() {
 		// mpi_unpack
 		init_buffer(size, mpi_smallbuf, true);
 		init_buffer(extent, mpi_bigbuf, false);
-		for (unsigned int i=0; i<WARMUP; i++) {
-			int pos = 0;
-			MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype->mpi, MPI_COMM_WORLD);
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			int pos = 0;
-			MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype->mpi, MPI_COMM_WORLD);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		mpi_unpack_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT( {int pos=0; MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype->mpi, MPI_COMM_WORLD);}, mpi_unpack_time);
 
 		// farc unpack
 		init_buffer(size, farc_smallbuf, true);
 		init_buffer(extent, farc_bigbuf, false);
-		for (unsigned int i=0; i<WARMUP; i++) {
-			DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype->farc, 1);
-		}
-		for (unsigned int i=0; i<NUMRUNS; i++) {
-			HRT_GET_TIMESTAMP(start);
-			DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype->farc, 1);
-			HRT_GET_TIMESTAMP(stop);
-			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
-		}
-		std::sort(times.begin(), times.end());
-		farc_unpack_time = HRT_GET_USEC(times[NUMRUNS/2]);
+		TIME_HOT(DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype->farc, 1), farc_unpack_time);
 
 		// verify
 		if (compare_buffers(size, mpi_smallbuf, farc_smallbuf) != 0) {
@@ -388,4 +340,3 @@ int main(int argc, char **argv) {
 
 	fclose(yyin);
 }
-
