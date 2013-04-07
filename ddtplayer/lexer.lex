@@ -27,31 +27,11 @@ letter        [a-zA-Z]
 [\[\]\(\):,]         { return yytext[0]; }
 
 [ \t\n\r]            /* skip whitespace */
+
+"//".*               { /*Ignore comment*/ }
+
 .                    { printf("Unknown character [%c]\n", yytext[0]); return UNKNOWN; }
 %%
 
 int yywrap(void){return 1;}
 
-
-
-/* int main(int argc, char **argv) { */
-/* 	int token; */
-
-/* 	if (argc < 2) { */
-/* 		fprintf(stderr, "%s <filename>\n", argv[0]); */
-/* 		exit(1); */
-/* 	} */
-
-/* 	/\* MPI_Init(&argc, &argv); *\/ */
-/* 	/\* farc::DDT_Init(); *\/ */
-/* 	// HRT_INIT(1, g_timerfreq); */
-
-/* 	yyin = fopen(argv[1], "r"); */
-/* 	if (yyin == NULL) { */
-/* 		fprintf(stderr, "Could not open file %s\n", argv[1]); */
-/* 	} */
-
-/* 	while ((token = yylex()) != 0) {} */
-
-/* 	fclose(yyin); */
-/* } */

@@ -1370,14 +1370,14 @@ int HIndexedDatatype::getSize() {
 
 string HIndexedDatatype::toString() {
 	stringstream res;
-	res << "hidx(" << this->Count << ")[";
+	res << "hidx(";
     for (unsigned int i=0; i<Displ.size(); i++) {
 		res << Displ[i] << "," << Blocklen[i];
 		if (i <Displ.size() - 1) {
 			res << " ";
 		}
     }
-	res << "]{" << Basetype->toString() << "}";
+	res << ")[" << Basetype->toString() << "]";
 	return res.str();
 }
 

@@ -14,11 +14,6 @@
 
 using namespace std;
 
-void alloc_buffer(size_t size, void** buffer, int alignment);
-void init_buffer(size_t size, void* buf, bool pattern);
-int compare_buffers(size_t size, void *buf1, void *buf2);
-void free_buffers(void *inbuf, void *outbuf);
-
 extern FILE * yyin;
 extern "C" int yylex (void);
 void yyerror(const char *);
@@ -30,6 +25,15 @@ struct Datatype {
 	MPI_Datatype    mpi;
 };
 
+struct Index {
+	int displ;
+	int blocklen;
+};
+
+struct Indices {
+	vector<struct Index *> indices;
+};
+
 vector<Datatype*> datatypes;
 
 %}
@@ -37,6 +41,10 @@ vector<Datatype*> datatypes;
 %union {
 	int val;
 	struct Datatype *datatype;
+
+	struct Index *index;
+	struct Indices *indices;
+
 };
 
 %token <val> NUM
@@ -44,7 +52,9 @@ vector<Datatype*> datatypes;
 %token <sym> CONTIGUOUS VECTOR HVECTOR HINDEXED STRUCT
 %token <sym> BYTE_ CHAR_ INT_ DOUBLE_ FLOAT_
 
-%type <datatype> datatype primitive derived contiguous vector hvector 
+%type <datatype> datatype primitive derived contiguous vector hvector hindexed
+%type <indices> idxentries
+%type <index>   idxentry
 
 %start input
 
@@ -97,7 +107,7 @@ derived:
 contiguous
 | vector
 | hvector
-/*| hindexed*/
+| hindexed
 ;
 
 contiguous:
@@ -124,11 +134,46 @@ HVECTOR '(' NUM NUM NUM ')' '[' datatype ']' {
 }
 ;
 
-/*
-parenlist:
+idxentry:
+NUM ',' NUM {
+	$$ = new Index;
+	$$->displ = $1;
+	$$->blocklen = $3;
+}
+;
+
+idxentries:
+/* empty rule */ {
+	$$ = new Indices;
+}
+| idxentries idxentry {
+	$$ = $1;
+	$$->indices.push_back($2);
+}
+;
+
 hindexed:
-HINDEXED '(' NUM ':' parenlist ')' '[' datatype ']'
-;*/
+HINDEXED '(' idxentries ')' '[' datatype ']' {
+	$$ = $6;
+
+	unsigned int num = $3->indices.size();
+
+	long *displs = (long*)malloc(num * sizeof(long));
+	int *blocklens = (int*)malloc(num * sizeof(int));
+	for(int i=0; i<num; i++) {
+		displs[i] = $3->indices[i]->displ;
+		blocklens[i] = $3->indices[i]->blocklen;
+		free($3->indices[i]);
+	}
+	free($3);
+
+	$$->farc = new farc::HIndexedDatatype(num, blocklens, displs, $6->farc);
+	MPI_Type_hindexed(num, blocklens, displs, $6->mpi, &($$->mpi));
+
+	free(displs);
+	free(blocklens);
+}
+;
 
 %%
 
@@ -170,10 +215,8 @@ int compare_buffers(size_t size, void *mpi, void *farc) {
     return ret;
 }
 
-#define ALIGNMENT 1
 #define WARMUP  5
 #define NUMRUNS 10
-
 #define TIME_HOT(code, median)                         \
 do {                                                   \
 	HRT_TIMESTAMP_T start, stop;                       \
@@ -191,6 +234,7 @@ do {                                                   \
 	median = HRT_GET_USEC(times[NUMRUNS/2]);           \
 } while(0)
 
+#define ALIGNMENT 1
 void produce_report() {
 	// Find text widths
 	int name_w        = 0;
@@ -243,8 +287,6 @@ void produce_report() {
 		alloc_buffer(size, &farc_smallbuf, ALIGNMENT);
 		alloc_buffer(extent, &farc_bigbuf, ALIGNMENT);
 
-		std::vector<uint64_t> times (NUMRUNS, 0);
-
 
 		// mpi_commit
 		TIME_HOT( MPI_Type_commit(&(datatype->mpi)), mpi_commit_time );
@@ -294,13 +336,6 @@ void produce_report() {
 		}
 
 
-		// free buffers
-		free(mpi_bigbuf);
-		free(mpi_smallbuf);
-		free(farc_bigbuf);
-		free(farc_smallbuf);
-
-
 		// output
 		cout << setw(name_w)        << datatype->farc->toString().c_str()
 			 << setw(size_w)        << size
@@ -312,6 +347,22 @@ void produce_report() {
 			 << setw(farc_unpack_w) << setiosflags(ios::fixed) << setprecision(3) << farc_unpack_time
 			 << endl;
 
+		// free buffers
+		free(mpi_bigbuf);
+		free(mpi_smallbuf);
+		free(farc_bigbuf);
+		free(farc_smallbuf);
+	}
+
+	// free datatypes
+	for (unsigned int i=0; i<datatypes.size(); i++) {
+		Datatype *datatype = datatypes[i];
+
+		// TODO: Also delete children
+		DDT_Free(datatype->farc);
+		MPI_Type_free(&(datatype->mpi));
+		
+		free(datatype);
 	}
 }
 
@@ -325,7 +376,7 @@ int main(int argc, char **argv) {
 
 	MPI_Init(&argc, &argv);
 	farc::DDT_Init();
-	HRT_INIT(1, g_timerfreq);
+	HRT_INIT(0, g_timerfreq);
 
 	yyin = fopen(argv[1], "r");
 	if (yyin == NULL) {
