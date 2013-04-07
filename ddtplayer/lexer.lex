@@ -23,14 +23,8 @@ letter        [a-zA-Z]
 
 {digit}+|-{digit}+   { yylval.val = atoi(yytext); return NUM; }
 
-[\(]                 { return LP; }
-[\)]                 { return RP; }
-[\[]                 { return LB; }
-[\]]                 { return RB; }
-[\{]                 { return LC; }
-[\}]                 { return RC; }
-[:]                  { return COL; }
-[,]                  { return COMMA; }
+
+[\[\]\(\):,]         { return yytext[0]; }
 
 [ \t\n\r]            /* skip whitespace */
 .                    { printf("Unknown character [%c]\n", yytext[0]); return UNKNOWN; }

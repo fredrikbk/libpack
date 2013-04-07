@@ -41,7 +41,7 @@ vector<Datatype*> datatypes;
 };
 
 %token <val> NUM
-%token <sym> UNKNOWN SUBTYPE ELEM LP RP LB RB LC RC COL COMMA
+%token <sym> UNKNOWN SUBTYPE ELEM
 %token <sym> CONTIGUOUS VECTOR HVECTOR HINDEXED STRUCT
 %token <sym> BYTE_ CHAR_ INT_ DOUBLE_ FLOAT_
 
@@ -58,10 +58,6 @@ input:
 topdatatype:
 datatype {
 	datatypes.push_back($1);
-
-	Datatype *datatype = $1;
-
-
 }
 ;
 
@@ -106,7 +102,7 @@ contiguous
 ;
 
 contiguous:
-CONTIGUOUS LP NUM RP LB datatype RB {
+CONTIGUOUS '(' NUM ')' '[' datatype ']' {
 	$$ = $6;
 	$$->farc = new farc::ContiguousDatatype($6->farc, $3);
 	MPI_Type_contiguous($3, $6->mpi, &($$->mpi));
@@ -114,7 +110,7 @@ CONTIGUOUS LP NUM RP LB datatype RB {
 ;
 
 vector:
-VECTOR LP NUM NUM NUM RP LB datatype RB { 
+VECTOR '(' NUM NUM NUM ')' '[' datatype ']' { 
 	$$ = $8;
 	$$->farc = new farc::VectorDatatype($8->farc, $3, $4, $5);
 	MPI_Type_vector($3, $4, $5, $8->mpi, &($$->mpi));
@@ -122,7 +118,7 @@ VECTOR LP NUM NUM NUM RP LB datatype RB {
 ;
 
 hvector:
-HVECTOR LP NUM NUM NUM RP LB datatype RB {
+HVECTOR '(' NUM NUM NUM ')' '[' datatype ']' {
 	$$ = $8;
 	$$->farc = new farc::HVectorDatatype($8->farc, $3, $4, $5);
 	MPI_Type_hvector($3, $4, $5, $8->mpi, &($$->mpi));
@@ -132,7 +128,7 @@ HVECTOR LP NUM NUM NUM RP LB datatype RB {
 /*
 parenlist:
 hindexed:
-HINDEXED LP NUM COL parenlist RP LB datatype RB
+HINDEXED '(' NUM ':' parenlist ')' '[' datatype ']'
 ;*/
 
 %%
@@ -243,6 +239,7 @@ void produce_report() {
 			HRT_GET_ELAPSED_TICKS(start, stop, &mpi_commit_time);
 			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
 		}
+		std::sort(times.begin(), times.end());
 		mpi_commit_time = HRT_GET_USEC(times[NUMRUNS/2]);
 
 		// farc_commit
@@ -255,6 +252,7 @@ void produce_report() {
 			HRT_GET_TIMESTAMP(stop);
 			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
 		}
+		std::sort(times.begin(), times.end());
 		farc_commit_time = HRT_GET_USEC(times[NUMRUNS/2]);
 
 
@@ -272,6 +270,7 @@ void produce_report() {
 			HRT_GET_TIMESTAMP(stop);
 			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
 		}
+		std::sort(times.begin(), times.end());
 		mpi_pack_time = HRT_GET_USEC(times[NUMRUNS/2]);
 
 		// farc pack
@@ -286,6 +285,7 @@ void produce_report() {
 			HRT_GET_TIMESTAMP(stop);
 			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
 		}
+		std::sort(times.begin(), times.end());
 		farc_pack_time = HRT_GET_USEC(times[NUMRUNS/2]);
 
 		// verify
@@ -313,6 +313,7 @@ void produce_report() {
 			HRT_GET_TIMESTAMP(stop);
 			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
 		}
+		std::sort(times.begin(), times.end());
 		mpi_unpack_time = HRT_GET_USEC(times[NUMRUNS/2]);
 
 		// farc unpack
@@ -327,6 +328,7 @@ void produce_report() {
 			HRT_GET_TIMESTAMP(stop);
 			HRT_GET_ELAPSED_TICKS(start, stop, &times[i]);
 		}
+		std::sort(times.begin(), times.end());
 		farc_unpack_time = HRT_GET_USEC(times[NUMRUNS/2]);
 
 		// verify
