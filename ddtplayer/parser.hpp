@@ -63,19 +63,24 @@ typedef union YYSTYPE
 {
 
 /* Line 1676 of yacc.c  */
-#line 41 "parser.y"
+#line 48 "parser.y"
 
 	int val;
-	struct Datatype *datatype;
+	struct Datatypes *types;
 
 	struct Index *index;
 	struct Indices *indices;
 
+	struct {
+		int start;
+		int stop;
+		int stride;
+	} range;
 
 
 
 /* Line 1676 of yacc.c  */
-#line 79 "parser.hpp"
+#line 84 "parser.hpp"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

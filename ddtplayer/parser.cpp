@@ -81,9 +81,12 @@
 #include <iomanip> 
 #include <vector>
 #include <queue>
+#include <list>
 #include <algorithm>
 
 using namespace std;
+
+int calc_num(int start, int stride, int stop);
 
 extern FILE * yyin;
 extern "C" int yylex (void);
@@ -96,6 +99,10 @@ struct Datatype {
 	MPI_Datatype    mpi;
 };
 
+struct Datatypes {
+	list<struct Datatype> types;
+};
+
 struct Index {
 	int displ;
 	int blocklen;
@@ -105,12 +112,12 @@ struct Indices {
 	vector<struct Index *> indices;
 };
 
-vector<Datatype*> datatypes;
+vector<struct Datatype> datatypes;
 
 
 
 /* Line 189 of yacc.c  */
-#line 114 "parser.cpp"
+#line 121 "parser.cpp"
 
 /* Enabling traces.  */
 #ifndef YYDEBUG
@@ -161,19 +168,24 @@ typedef union YYSTYPE
 {
 
 /* Line 214 of yacc.c  */
-#line 41 "parser.y"
+#line 48 "parser.y"
 
 	int val;
-	struct Datatype *datatype;
+	struct Datatypes *types;
 
 	struct Index *index;
 	struct Indices *indices;
 
+	struct {
+		int start;
+		int stop;
+		int stride;
+	} range;
 
 
 
 /* Line 214 of yacc.c  */
-#line 177 "parser.cpp"
+#line 189 "parser.cpp"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
@@ -185,7 +197,7 @@ typedef union YYSTYPE
 
 
 /* Line 264 of yacc.c  */
-#line 189 "parser.cpp"
+#line 201 "parser.cpp"
 
 #ifdef short
 # undef short
@@ -400,16 +412,16 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  2
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   52
+#define YYLAST   53
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  22
+#define YYNTOKENS  23
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  12
+#define YYNNTS  13
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  22
+#define YYNRULES  24
 /* YYNRULES -- Number of states.  */
-#define YYNSTATES  52
+#define YYNSTATES  57
 
 /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
 #define YYUNDEFTOK  2
@@ -425,12 +437,12 @@ static const yytype_uint8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-      17,    18,     2,     2,    21,     2,     2,     2,     2,     2,
+      18,    19,     2,     2,    22,     2,     2,     2,     2,     2,
+       2,     2,     2,     2,     2,     2,     2,     2,    17,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,    19,     2,    20,     2,     2,     2,     2,     2,     2,
+       2,    20,     2,    21,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -457,29 +469,30 @@ static const yytype_uint8 yytranslate[] =
 static const yytype_uint8 yyprhs[] =
 {
        0,     0,     3,     4,     7,     9,    11,    13,    15,    17,
-      19,    21,    23,    25,    27,    29,    31,    39,    49,    59,
-      63,    64,    67
+      19,    21,    23,    25,    27,    29,    31,    33,    39,    47,
+      57,    67,    71,    72,    75
 };
 
 /* YYRHS -- A `-1'-separated list of the rules' RHS.  */
 static const yytype_int8 yyrhs[] =
 {
-      23,     0,    -1,    -1,    23,    24,    -1,    25,    -1,    26,
-      -1,    27,    -1,    12,    -1,    13,    -1,    14,    -1,    16,
-      -1,    15,    -1,    28,    -1,    29,    -1,    30,    -1,    33,
-      -1,     7,    17,     3,    18,    19,    25,    20,    -1,     8,
-      17,     3,     3,     3,    18,    19,    25,    20,    -1,     9,
-      17,     3,     3,     3,    18,    19,    25,    20,    -1,     3,
-      21,     3,    -1,    -1,    32,    31,    -1,    10,    17,    32,
-      18,    19,    25,    20,    -1
+      24,     0,    -1,    -1,    24,    25,    -1,    26,    -1,    27,
+      -1,    28,    -1,    12,    -1,    13,    -1,    14,    -1,    16,
+      -1,    15,    -1,    30,    -1,    31,    -1,    32,    -1,    35,
+      -1,     3,    -1,     3,    17,     3,    17,     3,    -1,     7,
+      18,    29,    19,    20,    26,    21,    -1,     8,    18,    29,
+      29,    29,    19,    20,    26,    21,    -1,     9,    18,    29,
+      29,    29,    19,    20,    26,    21,    -1,     3,    22,     3,
+      -1,    -1,    34,    33,    -1,    10,    18,    34,    19,    20,
+      26,    21,    -1
 };
 
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    63,    63,    64,    68,    74,    75,    79,    84,    89,
-      94,    99,   107,   108,   109,   110,   114,   122,   130,   138,
-     146,   149,   156
+       0,    76,    76,    77,    81,    88,    89,    93,   100,   107,
+     114,   121,   131,   132,   133,   134,   138,   143,   152,   173,
+     198,   223,   231,   234,   241
 };
 #endif
 
@@ -490,9 +503,10 @@ static const char *const yytname[] =
 {
   "$end", "error", "$undefined", "NUM", "UNKNOWN", "SUBTYPE", "ELEM",
   "CONTIGUOUS", "VECTOR", "HVECTOR", "HINDEXED", "STRUCT", "BYTE_",
-  "CHAR_", "INT_", "DOUBLE_", "FLOAT_", "'('", "')'", "'['", "']'", "','",
-  "$accept", "input", "topdatatype", "datatype", "primitive", "derived",
-  "contiguous", "vector", "hvector", "idxentry", "idxentries", "hindexed", 0
+  "CHAR_", "INT_", "DOUBLE_", "FLOAT_", "':'", "'('", "')'", "'['", "']'",
+  "','", "$accept", "input", "topdatatype", "datatype", "primitive",
+  "derived", "range", "contiguous", "vector", "hvector", "idxentry",
+  "idxentries", "hindexed", 0
 };
 #endif
 
@@ -502,25 +516,25 @@ static const char *const yytname[] =
 static const yytype_uint16 yytoknum[] =
 {
        0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
-     265,   266,   267,   268,   269,   270,   271,    40,    41,    91,
-      93,    44
+     265,   266,   267,   268,   269,   270,   271,    58,    40,    41,
+      91,    93,    44
 };
 # endif
 
 /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_uint8 yyr1[] =
 {
-       0,    22,    23,    23,    24,    25,    25,    26,    26,    26,
-      26,    26,    27,    27,    27,    27,    28,    29,    30,    31,
-      32,    32,    33
+       0,    23,    24,    24,    25,    26,    26,    27,    27,    27,
+      27,    27,    28,    28,    28,    28,    29,    29,    30,    31,
+      32,    33,    34,    34,    35
 };
 
 /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
 static const yytype_uint8 yyr2[] =
 {
        0,     2,     0,     2,     1,     1,     1,     1,     1,     1,
-       1,     1,     1,     1,     1,     1,     7,     9,     9,     3,
-       0,     2,     7
+       1,     1,     1,     1,     1,     1,     1,     5,     7,     9,
+       9,     3,     0,     2,     7
 };
 
 /* YYDEFACT[STATE-NAME] -- Default rule to reduce with in state
@@ -530,37 +544,37 @@ static const yytype_uint8 yydefact[] =
 {
        2,     0,     1,     0,     0,     0,     0,     7,     8,     9,
       11,    10,     3,     4,     5,     6,    12,    13,    14,    15,
-       0,     0,     0,    20,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,    21,     0,     0,     0,     0,     0,     0,
-       0,     0,    19,     0,    16,     0,     0,    22,     0,     0,
-      17,    18
+       0,     0,     0,    22,    16,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,    23,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,    21,     0,    17,    18,
+       0,     0,    24,     0,     0,    19,    20
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-      -1,     1,    12,    13,    14,    15,    16,    17,    18,    33,
-      27,    19
+      -1,     1,    12,    13,    14,    15,    25,    16,    17,    18,
+      35,    28,    19
 };
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
    STATE-NUM.  */
-#define YYPACT_NINF -17
+#define YYPACT_NINF -20
 static const yytype_int8 yypact[] =
 {
-     -17,     0,   -17,   -14,   -13,   -12,   -11,   -17,   -17,   -17,
-     -17,   -17,   -17,   -17,   -17,   -17,   -17,   -17,   -17,   -17,
-      -2,     8,    16,   -17,     2,    18,    20,    -1,     5,    22,
-      23,     6,     9,   -17,    24,    17,    25,    38,    24,    26,
-      28,    29,   -17,    30,   -17,    24,    24,   -17,    31,    32,
-     -17,   -17
+     -20,     0,   -20,   -16,   -15,   -14,   -13,   -20,   -20,   -20,
+     -20,   -20,   -20,   -20,   -20,   -20,   -20,   -20,   -20,   -20,
+       3,     3,     3,   -20,    -6,     1,     3,     3,    -2,    16,
+       5,     3,     3,    -1,     6,   -20,    10,    28,    11,    20,
+      42,    28,    43,    26,    29,    30,   -20,    27,   -20,   -20,
+      28,    28,   -20,    31,    32,   -20,   -20
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -17,   -17,   -17,   -16,   -17,   -17,   -17,   -17,   -17,   -17,
-     -17,   -17
+     -20,   -20,   -20,   -19,   -20,   -20,     2,   -20,   -20,   -20,
+     -20,   -20,   -20
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
@@ -570,34 +584,34 @@ static const yytype_int8 yypgoto[] =
 #define YYTABLE_NINF -1
 static const yytype_uint8 yytable[] =
 {
-       2,    24,    31,    20,    21,    22,    23,     3,     4,     5,
-       6,    25,     7,     8,     9,    10,    11,    32,    39,    26,
-      28,    29,    43,    30,    34,    35,    36,    37,    38,    48,
-      49,     3,     4,     5,     6,    40,     7,     8,     9,    10,
-      11,    42,     0,    41,     0,     0,    44,    45,    46,     0,
-      47,    50,    51
+       2,    33,    20,    21,    22,    23,    24,     3,     4,     5,
+       6,    29,     7,     8,     9,    10,    11,    34,    43,    36,
+      30,    40,    47,    26,    27,    37,    41,    42,    31,    32,
+      44,    53,    54,    38,    39,     3,     4,     5,     6,    45,
+       7,     8,     9,    10,    11,    46,    48,    49,    52,    50,
+      51,     0,    55,    56
 };
 
 static const yytype_int8 yycheck[] =
 {
-       0,     3,     3,    17,    17,    17,    17,     7,     8,     9,
-      10,     3,    12,    13,    14,    15,    16,    18,    34,     3,
-      18,     3,    38,     3,    19,     3,     3,    21,    19,    45,
-      46,     7,     8,     9,    10,    18,    12,    13,    14,    15,
-      16,     3,    -1,    18,    -1,    -1,    20,    19,    19,    -1,
-      20,    20,    20
+       0,     3,    18,    18,    18,    18,     3,     7,     8,     9,
+      10,    17,    12,    13,    14,    15,    16,    19,    37,     3,
+      19,    22,    41,    21,    22,    20,    20,    17,    26,    27,
+      19,    50,    51,    31,    32,     7,     8,     9,    10,    19,
+      12,    13,    14,    15,    16,     3,     3,    21,    21,    20,
+      20,    -1,    21,    21
 };
 
 /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
    symbol of state STATE-NUM.  */
 static const yytype_uint8 yystos[] =
 {
-       0,    23,     0,     7,     8,     9,    10,    12,    13,    14,
-      15,    16,    24,    25,    26,    27,    28,    29,    30,    33,
-      17,    17,    17,    17,     3,     3,     3,    32,    18,     3,
-       3,     3,    18,    31,    19,     3,     3,    21,    19,    25,
-      18,    18,     3,    25,    20,    19,    19,    20,    25,    25,
-      20,    20
+       0,    24,     0,     7,     8,     9,    10,    12,    13,    14,
+      15,    16,    25,    26,    27,    28,    30,    31,    32,    35,
+      18,    18,    18,    18,     3,    29,    29,    29,    34,    17,
+      19,    29,    29,     3,    19,    33,     3,    20,    29,    29,
+      22,    20,    17,    26,    19,    19,     3,    26,     3,    21,
+      20,    20,    21,    26,    26,    21,    21
 };
 
 #define yyerrok		(yyerrstatus = 0)
@@ -1411,104 +1425,184 @@ yyreduce:
         case 4:
 
 /* Line 1455 of yacc.c  */
-#line 68 "parser.y"
+#line 81 "parser.y"
     {
-	datatypes.push_back((yyvsp[(1) - (1)].datatype));
+	datatypes.insert( datatypes.end(), (yyvsp[(1) - (1)].types)->types.begin(), (yyvsp[(1) - (1)].types)->types.end() );
+	free((yyvsp[(1) - (1)].types));
 ;}
     break;
 
   case 7:
 
 /* Line 1455 of yacc.c  */
-#line 79 "parser.y"
+#line 93 "parser.y"
     {
-	(yyval.datatype) = new Datatype;
-	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::BYTE);
-	(yyval.datatype)->mpi  = MPI_BYTE;
+	(yyval.types) = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::BYTE);
+	datatype.mpi  = MPI_BYTE;
+	(yyval.types)->types.push_back(datatype);
 ;}
     break;
 
   case 8:
 
 /* Line 1455 of yacc.c  */
-#line 84 "parser.y"
+#line 100 "parser.y"
     {
-	(yyval.datatype) = new Datatype;
-	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::CHAR);
-	(yyval.datatype)->mpi  = MPI_CHAR;
+	(yyval.types) = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::CHAR);
+	datatype.mpi  = MPI_CHAR;
+	(yyval.types)->types.push_back(datatype);
 ;}
     break;
 
   case 9:
 
 /* Line 1455 of yacc.c  */
-#line 89 "parser.y"
+#line 107 "parser.y"
     {
-	(yyval.datatype) = new Datatype;
-	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
-	(yyval.datatype)->mpi  = MPI_INT;
+	(yyval.types) = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
+	datatype.mpi  = MPI_INT;
+	(yyval.types)->types.push_back(datatype);
 ;}
     break;
 
   case 10:
 
 /* Line 1455 of yacc.c  */
-#line 94 "parser.y"
+#line 114 "parser.y"
     {
-	(yyval.datatype) = new Datatype;
-	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::FLOAT);
-	(yyval.datatype)->mpi  = MPI_FLOAT;
+	(yyval.types) = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::FLOAT);
+	datatype.mpi  = MPI_FLOAT;
+	(yyval.types)->types.push_back(datatype);
 ;}
     break;
 
   case 11:
 
 /* Line 1455 of yacc.c  */
-#line 99 "parser.y"
+#line 121 "parser.y"
     {
-	(yyval.datatype) = new Datatype;
-	(yyval.datatype)->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
-	(yyval.datatype)->mpi  = MPI_DOUBLE;
+	(yyval.types) = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
+	datatype.mpi  = MPI_DOUBLE;
+	(yyval.types)->types.push_back(datatype);
 ;}
     break;
 
   case 16:
 
 /* Line 1455 of yacc.c  */
-#line 114 "parser.y"
+#line 138 "parser.y"
     {
-	(yyval.datatype) = (yyvsp[(6) - (7)].datatype);
-	(yyval.datatype)->farc = new farc::ContiguousDatatype((yyvsp[(6) - (7)].datatype)->farc, (yyvsp[(3) - (7)].val));
-	MPI_Type_contiguous((yyvsp[(3) - (7)].val), (yyvsp[(6) - (7)].datatype)->mpi, &((yyval.datatype)->mpi));
+	(yyval.range).start = (yyvsp[(1) - (1)].val);
+	(yyval.range).stride = 1;
+	(yyval.range).stop = (yyvsp[(1) - (1)].val);
 ;}
     break;
 
   case 17:
 
 /* Line 1455 of yacc.c  */
-#line 122 "parser.y"
-    { 
-	(yyval.datatype) = (yyvsp[(8) - (9)].datatype);
-	(yyval.datatype)->farc = new farc::VectorDatatype((yyvsp[(8) - (9)].datatype)->farc, (yyvsp[(3) - (9)].val), (yyvsp[(4) - (9)].val), (yyvsp[(5) - (9)].val));
-	MPI_Type_vector((yyvsp[(3) - (9)].val), (yyvsp[(4) - (9)].val), (yyvsp[(5) - (9)].val), (yyvsp[(8) - (9)].datatype)->mpi, &((yyval.datatype)->mpi));
+#line 143 "parser.y"
+    {
+	(yyval.range).start = (yyvsp[(1) - (5)].val);
+	(yyval.range).stride = (yyvsp[(3) - (5)].val);
+	(yyval.range).stop = (yyvsp[(5) - (5)].val);
 ;}
     break;
 
   case 18:
 
 /* Line 1455 of yacc.c  */
-#line 130 "parser.y"
+#line 152 "parser.y"
     {
-	(yyval.datatype) = (yyvsp[(8) - (9)].datatype);
-	(yyval.datatype)->farc = new farc::HVectorDatatype((yyvsp[(8) - (9)].datatype)->farc, (yyvsp[(3) - (9)].val), (yyvsp[(4) - (9)].val), (yyvsp[(5) - (9)].val));
-	MPI_Type_hvector((yyvsp[(3) - (9)].val), (yyvsp[(4) - (9)].val), (yyvsp[(5) - (9)].val), (yyvsp[(8) - (9)].datatype)->mpi, &((yyval.datatype)->mpi));
+	(yyval.types) = new Datatypes;
+
+	list<struct Datatype> *subtypes = &((yyvsp[(6) - (7)].types)->types);
+	list<struct Datatype> *types = &((yyval.types)->types);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		for (int count=(yyvsp[(3) - (7)].range).start; count <= (yyvsp[(3) - (7)].range).stop; count += (yyvsp[(3) - (7)].range).stride) {
+			Datatype type;
+			type.farc = new farc::ContiguousDatatype(subtype->farc, count);
+			MPI_Type_contiguous(count, subtype->mpi, &(type.mpi));
+			types->push_back(type);
+		}
+	}
+
+	free((yyvsp[(6) - (7)].types));
 ;}
     break;
 
   case 19:
 
 /* Line 1455 of yacc.c  */
-#line 138 "parser.y"
+#line 173 "parser.y"
+    { 
+	(yyval.types) = new Datatypes;
+
+	list<struct Datatype> *subtypes = &((yyvsp[(8) - (9)].types)->types);
+	list<struct Datatype> *types = &((yyval.types)->types);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		for (int count=(yyvsp[(3) - (9)].range).start; count <= (yyvsp[(3) - (9)].range).stop; count += (yyvsp[(3) - (9)].range).stride) {
+			for (int blocklen=(yyvsp[(4) - (9)].range).start; blocklen <= (yyvsp[(4) - (9)].range).stop; blocklen += (yyvsp[(4) - (9)].range).stride) {
+				for (int stride=(yyvsp[(5) - (9)].range).start; stride <= (yyvsp[(5) - (9)].range).stop; stride += (yyvsp[(5) - (9)].range).stride) {
+					Datatype type;
+					type.farc = new farc::VectorDatatype(subtype->farc, count, blocklen, stride);
+					MPI_Type_vector(count, blocklen, stride, subtype->mpi, &(type.mpi));
+					types->push_back(type);
+				}
+			}
+		}
+	}
+
+	free((yyvsp[(8) - (9)].types));
+;}
+    break;
+
+  case 20:
+
+/* Line 1455 of yacc.c  */
+#line 198 "parser.y"
+    {
+	(yyval.types) = new Datatypes;
+
+	list<struct Datatype> *subtypes = &((yyvsp[(8) - (9)].types)->types);
+	list<struct Datatype> *types = &((yyval.types)->types);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		for (int count=(yyvsp[(3) - (9)].range).start; count <= (yyvsp[(3) - (9)].range).stop; count += (yyvsp[(3) - (9)].range).stride) {
+			for (int blocklen=(yyvsp[(4) - (9)].range).start; blocklen <= (yyvsp[(4) - (9)].range).stop; blocklen += (yyvsp[(4) - (9)].range).stride) {
+				for (int stride=(yyvsp[(5) - (9)].range).start; stride <= (yyvsp[(5) - (9)].range).stop; stride += (yyvsp[(5) - (9)].range).stride) {
+					Datatype type;
+					type.farc = new farc::HVectorDatatype(subtype->farc, count, blocklen, stride);
+					MPI_Type_hvector(count, blocklen, stride, subtype->mpi, &(type.mpi));
+					types->push_back(type);
+				}
+			}
+		}
+	}
+
+	free((yyvsp[(8) - (9)].types));
+;}
+    break;
+
+  case 21:
+
+/* Line 1455 of yacc.c  */
+#line 223 "parser.y"
     {
 	(yyval.index) = new Index;
 	(yyval.index)->displ = (yyvsp[(1) - (3)].val);
@@ -1516,36 +1610,39 @@ yyreduce:
 ;}
     break;
 
-  case 20:
+  case 22:
 
 /* Line 1455 of yacc.c  */
-#line 146 "parser.y"
+#line 231 "parser.y"
     {
 	(yyval.indices) = new Indices;
 ;}
     break;
 
-  case 21:
+  case 23:
 
 /* Line 1455 of yacc.c  */
-#line 149 "parser.y"
+#line 234 "parser.y"
     {
 	(yyval.indices) = (yyvsp[(1) - (2)].indices);
 	(yyval.indices)->indices.push_back((yyvsp[(2) - (2)].index));
 ;}
     break;
 
-  case 22:
+  case 24:
 
 /* Line 1455 of yacc.c  */
-#line 156 "parser.y"
+#line 241 "parser.y"
     {
-	(yyval.datatype) = (yyvsp[(6) - (7)].datatype);
+	(yyval.types) = new Datatypes;
+
+	list<struct Datatype> *subtypes = &((yyvsp[(6) - (7)].types)->types);
+	list<struct Datatype> *types = &((yyval.types)->types);
 
 	unsigned int num = (yyvsp[(3) - (7)].indices)->indices.size();
-
 	long *displs = (long*)malloc(num * sizeof(long));
 	int *blocklens = (int*)malloc(num * sizeof(int));
+
 	for(int i=0; i<num; i++) {
 		displs[i] = (yyvsp[(3) - (7)].indices)->indices[i]->displ;
 		blocklens[i] = (yyvsp[(3) - (7)].indices)->indices[i]->blocklen;
@@ -1553,18 +1650,24 @@ yyreduce:
 	}
 	free((yyvsp[(3) - (7)].indices));
 
-	(yyval.datatype)->farc = new farc::HIndexedDatatype(num, blocklens, displs, (yyvsp[(6) - (7)].datatype)->farc);
-	MPI_Type_hindexed(num, blocklens, displs, (yyvsp[(6) - (7)].datatype)->mpi, &((yyval.datatype)->mpi));
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		Datatype type;
+		type.farc = new farc::HIndexedDatatype(num, blocklens, displs, subtype->farc);
+		MPI_Type_hindexed(num, blocklens, displs, subtype->mpi, &(type.mpi));
+		types->push_back(type);
+	}
 
 	free(displs);
 	free(blocklens);
+	free((yyvsp[(6) - (7)].types));
 ;}
     break;
 
 
 
 /* Line 1455 of yacc.c  */
-#line 1568 "parser.cpp"
+#line 1671 "parser.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -1776,11 +1879,15 @@ yyreturn:
 
 
 /* Line 1675 of yacc.c  */
-#line 178 "parser.y"
+#line 272 "parser.y"
 
 
 void yyerror(const char *s) {
 	fprintf (stderr, "Error: %s\n", s);
+}
+
+int calc_num(int start, int stride, int stop) {
+	return 1+(stop-start)/stride;
 }
 
 void alloc_buffer(size_t size, void** buffer, int alignment) {
@@ -1839,37 +1946,41 @@ do {                                                   \
 #define ALIGNMENT 1
 void produce_report() {
 	// Find text widths
-	int name_w        = 0;
-	int size_w        = 9;
-	int mpi_commit_w  = 12;
-	int farc_commit_w = 13;
-	int mpi_pack_w    = 10;
-	int farc_pack_w   = 11;
-	int mpi_unpack_w  = 12;
-	int farc_unpack_w = 13;
+	int name_w         = 0;
+	int size_w         = 9;
+	int mpi_commit_w   = 12;
+	int farc_commit_w  = 13;
+	int mpi_pack_w     = 10;
+	int farc_pack_w    = 11;
+	int pack_spdup_w   = 12;
+	int mpi_unpack_w   = 12;
+	int farc_unpack_w  = 13;
+	int unpack_spdup_w = 14;
 
 	for (unsigned int i=0; i<datatypes.size(); i++) {
-		int textSize = datatypes[i]->farc->toString().size();
+		int textSize = datatypes[i].farc->toString().size();
 		if (textSize > name_w) {
 			name_w = textSize;
 		}
 	}
 
-	cout << setw(name_w)        << ""
-		 << setw(size_w)        << "size"
-		 << setw(mpi_commit_w)  << "mpi_commit"
-		 << setw(farc_commit_w) << "farc_commit"
-		 << setw(mpi_pack_w)    << "mpi_pack"
-		 << setw(farc_pack_w)   << "farc_pack"
-		 << setw(mpi_unpack_w)  << "mpi_unpack"
-		 << setw(farc_unpack_w) << "farc_unpack"
+	cout << setw(name_w)         << ""
+		 << setw(size_w)         << "size"
+		 << setw(mpi_commit_w)   << "mpi_commit"
+		 << setw(farc_commit_w)  << "farc_commit"
+		 << setw(mpi_pack_w)     << "mpi_pack"
+		 << setw(farc_pack_w)    << "farc_pack"
+		 << setw(mpi_unpack_w)   << "mpi_unpack"
+		 << setw(farc_unpack_w)  << "farc_unpack"
+		 << setw(pack_spdup_w)   << "pack_spdup"
+		 << setw(unpack_spdup_w) << "unpack_spdup"
 		 << endl;
 	
 	// Produce report
 	for (unsigned int i=0; i<datatypes.size(); i++) {
 		HRT_TIMESTAMP_T start, stop;
 
-		Datatype *datatype = datatypes[i];
+		Datatype datatype = datatypes[i];
 
 		double mpi_commit_time   = 0.0;
 		double farc_commit_time  = 0.0;
@@ -1878,8 +1989,8 @@ void produce_report() {
 		double mpi_unpack_time   = 0.0;
 		double farc_unpack_time  = 0.0;
 
-		int size = datatype->farc->getSize();
-		int extent = datatype->farc->getExtent();
+		int size = datatype.farc->getSize();
+		int extent = datatype.farc->getExtent();
 
 		void *mpi_bigbuf, *mpi_smallbuf;
 		alloc_buffer(size, &mpi_smallbuf, ALIGNMENT);
@@ -1891,62 +2002,70 @@ void produce_report() {
 
 
 		// mpi_commit
-		TIME_HOT( MPI_Type_commit(&(datatype->mpi)), mpi_commit_time );
+		TIME_HOT( MPI_Type_commit(&(datatype.mpi)), mpi_commit_time );
 
 		// farc_commit
-		TIME_HOT( DDT_Commit(datatype->farc), farc_commit_time );
+		TIME_HOT( DDT_Commit(datatype.farc), farc_commit_time );
 
 		// mpi_pack
 		init_buffer(extent, mpi_bigbuf, true);
 		init_buffer(size, mpi_smallbuf, false);
-		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf, 1, datatype->mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
+		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf, 1, datatype.mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
 
 		// farc pack
 		init_buffer(extent, farc_bigbuf, true);
 		init_buffer(size, farc_smallbuf, false);
-		TIME_HOT( DDT_Pack(farc_bigbuf, farc_smallbuf, datatype->farc, 1), farc_pack_time);
+		TIME_HOT( DDT_Pack(farc_bigbuf, farc_smallbuf, datatype.farc, 1), farc_pack_time);
 
 		// verify
 		if (compare_buffers(extent, mpi_bigbuf, farc_bigbuf) != 0) {
 			fprintf(stderr, "Error: %s: MPI and FARC input buffers differ after packing\n", 
-				datatype->farc->toString().c_str());
+				datatype.farc->toString().c_str());
 		}
 		if (compare_buffers(size, mpi_smallbuf, farc_smallbuf) != 0) {
 			fprintf(stderr, "Error: %s: MPI and FARC output buffers differ after packing\n", 
-				datatype->farc->toString().c_str());
+				datatype.farc->toString().c_str());
 		}
 
 
 		// mpi_unpack
 		init_buffer(size, mpi_smallbuf, true);
 		init_buffer(extent, mpi_bigbuf, false);
-		TIME_HOT( {int pos=0; MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype->mpi, MPI_COMM_WORLD);}, mpi_unpack_time);
+		TIME_HOT( {int pos=0; MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype.mpi, MPI_COMM_WORLD);}, mpi_unpack_time);
 
 		// farc unpack
 		init_buffer(size, farc_smallbuf, true);
 		init_buffer(extent, farc_bigbuf, false);
-		TIME_HOT(DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype->farc, 1), farc_unpack_time);
+		TIME_HOT(DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype.farc, 1), farc_unpack_time);
 
 		// verify
 		if (compare_buffers(size, mpi_smallbuf, farc_smallbuf) != 0) {
 			fprintf(stderr, "Error: %s: MPI and FARC input buffers differ after unpacking\n", 
-				datatype->farc->toString().c_str());
+				datatype.farc->toString().c_str());
 		}
 		if (compare_buffers(extent, mpi_bigbuf, farc_bigbuf) != 0) {
 			fprintf(stderr, "Error: %s: MPI and FARC output buffers differ after unpacking\n", 
-				datatype->farc->toString().c_str());
+				datatype.farc->toString().c_str());
 		}
 
+		double pack_speedup   = ((mpi_pack_time/farc_pack_time)-1)*100;
+		double unpack_speedup = ((mpi_unpack_time/farc_unpack_time)-1)*100;
 
 		// output
-		cout << setw(name_w)        << datatype->farc->toString().c_str()
-			 << setw(size_w)        << size
-			 << setw(mpi_commit_w)  << setiosflags(ios::fixed) << setprecision(2) << mpi_commit_time
-			 << setw(farc_commit_w) << setiosflags(ios::fixed) << setprecision(2) << farc_commit_time
-			 << setw(mpi_pack_w)    << setiosflags(ios::fixed) << setprecision(3) << mpi_pack_time
-			 << setw(farc_pack_w)   << setiosflags(ios::fixed) << setprecision(3) << farc_pack_time
-			 << setw(mpi_unpack_w)  << setiosflags(ios::fixed) << setprecision(3) << mpi_unpack_time
-			 << setw(farc_unpack_w) << setiosflags(ios::fixed) << setprecision(3) << farc_unpack_time
+		cout.flags(std::ios::left);
+		cout << setw(name_w)        << datatype.farc->toString().c_str();
+
+		cout.flags(ios::right);
+		cout.flags(ios::fixed);
+		cout << setw(size_w)           << size
+			 << setw(mpi_commit_w)     << setprecision(2) << mpi_commit_time
+			 << setw(farc_commit_w)    << setprecision(2) << farc_commit_time
+			 << setw(mpi_pack_w)       << setprecision(3) << mpi_pack_time
+			 << setw(farc_pack_w)      << setprecision(3) << farc_pack_time
+			 << setw(mpi_unpack_w)     << setprecision(3) << mpi_unpack_time
+			 << setw(farc_unpack_w)    << setprecision(3) << farc_unpack_time
+			 << setw(pack_spdup_w-1)   << setprecision(1) << pack_speedup     << "%"
+			 << setw(unpack_spdup_w-1) << setprecision(1) << unpack_speedup   << "%"
 			 << endl;
 
 		// free buffers
@@ -1958,13 +2077,11 @@ void produce_report() {
 
 	// free datatypes
 	for (unsigned int i=0; i<datatypes.size(); i++) {
-		Datatype *datatype = datatypes[i];
+		Datatype datatype = datatypes[i];
 
 		// TODO: Also delete children
-		DDT_Free(datatype->farc);
-		MPI_Type_free(&(datatype->mpi));
-		
-		free(datatype);
+		DDT_Free(datatype.farc);
+		MPI_Type_free(&(datatype.mpi));
 	}
 }
 

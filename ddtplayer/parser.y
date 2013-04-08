@@ -10,9 +10,12 @@
 #include <iomanip> 
 #include <vector>
 #include <queue>
+#include <list>
 #include <algorithm>
 
 using namespace std;
+
+int calc_num(int start, int stride, int stop);
 
 extern FILE * yyin;
 extern "C" int yylex (void);
@@ -25,6 +28,10 @@ struct Datatype {
 	MPI_Datatype    mpi;
 };
 
+struct Datatypes {
+	list<struct Datatype> types;
+};
+
 struct Index {
 	int displ;
 	int blocklen;
@@ -34,17 +41,22 @@ struct Indices {
 	vector<struct Index *> indices;
 };
 
-vector<Datatype*> datatypes;
+vector<struct Datatype> datatypes;
 
 %}
 
 %union {
 	int val;
-	struct Datatype *datatype;
+	struct Datatypes *types;
 
 	struct Index *index;
 	struct Indices *indices;
 
+	struct {
+		int start;
+		int stop;
+		int stride;
+	} range;
 };
 
 %token <val> NUM
@@ -52,9 +64,10 @@ vector<Datatype*> datatypes;
 %token <sym> CONTIGUOUS VECTOR HVECTOR HINDEXED STRUCT
 %token <sym> BYTE_ CHAR_ INT_ DOUBLE_ FLOAT_
 
-%type <datatype> datatype primitive derived contiguous vector hvector hindexed
+%type <types> datatype primitive derived contiguous vector hvector hindexed
 %type <indices> idxentries
 %type <index>   idxentry
+%type <range>   range
 
 %start input
 
@@ -66,7 +79,8 @@ input:
 
 topdatatype:
 datatype {
-	datatypes.push_back($1);
+	datatypes.insert( datatypes.end(), $1->types.begin(), $1->types.end() );
+	free($1);
 }
 ;
 
@@ -77,29 +91,39 @@ derived
 
 primitive:
 BYTE_ {
-	$$ = new Datatype;
-	$$->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::BYTE);
-	$$->mpi  = MPI_BYTE;
+	$$ = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::BYTE);
+	datatype.mpi  = MPI_BYTE;
+	$$->types.push_back(datatype);
 }
 | CHAR_ {
-	$$ = new Datatype;
-	$$->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::CHAR);
-	$$->mpi  = MPI_CHAR;
+	$$ = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::CHAR);
+	datatype.mpi  = MPI_CHAR;
+	$$->types.push_back(datatype);
 }
 | INT_ {
-	$$ = new Datatype;
-	$$->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
-	$$->mpi  = MPI_INT;
+	$$ = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
+	datatype.mpi  = MPI_INT;
+	$$->types.push_back(datatype);
 }
 | FLOAT_ {
-	$$ = new Datatype;
-	$$->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::FLOAT);
-	$$->mpi  = MPI_FLOAT;
+	$$ = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::FLOAT);
+	datatype.mpi  = MPI_FLOAT;
+	$$->types.push_back(datatype);
 }
 | DOUBLE_ {
-	$$ = new Datatype;
-	$$->farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
-	$$->mpi  = MPI_DOUBLE;
+	$$ = new Datatypes;
+	struct Datatype datatype;
+	datatype.farc = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
+	datatype.mpi  = MPI_DOUBLE;
+	$$->types.push_back(datatype);
 }
 ;
 
@@ -110,27 +134,88 @@ contiguous
 | hindexed
 ;
 
+range:
+NUM {
+	$$.start = $1;
+	$$.stride = 1;
+	$$.stop = $1;
+}
+| NUM ':' NUM ':' NUM {
+	$$.start = $1;
+	$$.stride = $3;
+	$$.stop = $5;
+}
+
+
+
 contiguous:
-CONTIGUOUS '(' NUM ')' '[' datatype ']' {
-	$$ = $6;
-	$$->farc = new farc::ContiguousDatatype($6->farc, $3);
-	MPI_Type_contiguous($3, $6->mpi, &($$->mpi));
+CONTIGUOUS '(' range ')' '[' datatype ']' {
+	$$ = new Datatypes;
+
+	list<struct Datatype> *subtypes = &($6->types);
+	list<struct Datatype> *types = &($$->types);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		for (int count=$3.start; count <= $3.stop; count += $3.stride) {
+			Datatype type;
+			type.farc = new farc::ContiguousDatatype(subtype->farc, count);
+			MPI_Type_contiguous(count, subtype->mpi, &(type.mpi));
+			types->push_back(type);
+		}
+	}
+
+	free($6);
 }
 ;
 
 vector:
-VECTOR '(' NUM NUM NUM ')' '[' datatype ']' { 
-	$$ = $8;
-	$$->farc = new farc::VectorDatatype($8->farc, $3, $4, $5);
-	MPI_Type_vector($3, $4, $5, $8->mpi, &($$->mpi));
+VECTOR '(' range range range ')' '[' datatype ']' { 
+	$$ = new Datatypes;
+
+	list<struct Datatype> *subtypes = &($8->types);
+	list<struct Datatype> *types = &($$->types);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		for (int count=$3.start; count <= $3.stop; count += $3.stride) {
+			for (int blocklen=$4.start; blocklen <= $4.stop; blocklen += $4.stride) {
+				for (int stride=$5.start; stride <= $5.stop; stride += $5.stride) {
+					Datatype type;
+					type.farc = new farc::VectorDatatype(subtype->farc, count, blocklen, stride);
+					MPI_Type_vector(count, blocklen, stride, subtype->mpi, &(type.mpi));
+					types->push_back(type);
+				}
+			}
+		}
+	}
+
+	free($8);
 }
 ;
 
 hvector:
-HVECTOR '(' NUM NUM NUM ')' '[' datatype ']' {
-	$$ = $8;
-	$$->farc = new farc::HVectorDatatype($8->farc, $3, $4, $5);
-	MPI_Type_hvector($3, $4, $5, $8->mpi, &($$->mpi));
+HVECTOR '(' range range range ')' '[' datatype ']' {
+	$$ = new Datatypes;
+
+	list<struct Datatype> *subtypes = &($8->types);
+	list<struct Datatype> *types = &($$->types);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		for (int count=$3.start; count <= $3.stop; count += $3.stride) {
+			for (int blocklen=$4.start; blocklen <= $4.stop; blocklen += $4.stride) {
+				for (int stride=$5.start; stride <= $5.stop; stride += $5.stride) {
+					Datatype type;
+					type.farc = new farc::HVectorDatatype(subtype->farc, count, blocklen, stride);
+					MPI_Type_hvector(count, blocklen, stride, subtype->mpi, &(type.mpi));
+					types->push_back(type);
+				}
+			}
+		}
+	}
+
+	free($8);
 }
 ;
 
@@ -154,12 +239,15 @@ idxentries:
 
 hindexed:
 HINDEXED '(' idxentries ')' '[' datatype ']' {
-	$$ = $6;
+	$$ = new Datatypes;
+
+	list<struct Datatype> *subtypes = &($6->types);
+	list<struct Datatype> *types = &($$->types);
 
 	unsigned int num = $3->indices.size();
-
 	long *displs = (long*)malloc(num * sizeof(long));
 	int *blocklens = (int*)malloc(num * sizeof(int));
+
 	for(int i=0; i<num; i++) {
 		displs[i] = $3->indices[i]->displ;
 		blocklens[i] = $3->indices[i]->blocklen;
@@ -167,11 +255,17 @@ HINDEXED '(' idxentries ')' '[' datatype ']' {
 	}
 	free($3);
 
-	$$->farc = new farc::HIndexedDatatype(num, blocklens, displs, $6->farc);
-	MPI_Type_hindexed(num, blocklens, displs, $6->mpi, &($$->mpi));
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		Datatype type;
+		type.farc = new farc::HIndexedDatatype(num, blocklens, displs, subtype->farc);
+		MPI_Type_hindexed(num, blocklens, displs, subtype->mpi, &(type.mpi));
+		types->push_back(type);
+	}
 
 	free(displs);
 	free(blocklens);
+	free($6);
 }
 ;
 
@@ -179,6 +273,10 @@ HINDEXED '(' idxentries ')' '[' datatype ']' {
 
 void yyerror(const char *s) {
 	fprintf (stderr, "Error: %s\n", s);
+}
+
+int calc_num(int start, int stride, int stop) {
+	return 1+(stop-start)/stride;
 }
 
 void alloc_buffer(size_t size, void** buffer, int alignment) {
@@ -237,37 +335,41 @@ do {                                                   \
 #define ALIGNMENT 1
 void produce_report() {
 	// Find text widths
-	int name_w        = 0;
-	int size_w        = 9;
-	int mpi_commit_w  = 12;
-	int farc_commit_w = 13;
-	int mpi_pack_w    = 10;
-	int farc_pack_w   = 11;
-	int mpi_unpack_w  = 12;
-	int farc_unpack_w = 13;
+	int name_w         = 0;
+	int size_w         = 9;
+	int mpi_commit_w   = 12;
+	int farc_commit_w  = 13;
+	int mpi_pack_w     = 10;
+	int farc_pack_w    = 11;
+	int pack_spdup_w   = 12;
+	int mpi_unpack_w   = 12;
+	int farc_unpack_w  = 13;
+	int unpack_spdup_w = 14;
 
 	for (unsigned int i=0; i<datatypes.size(); i++) {
-		int textSize = datatypes[i]->farc->toString().size();
+		int textSize = datatypes[i].farc->toString().size();
 		if (textSize > name_w) {
 			name_w = textSize;
 		}
 	}
 
-	cout << setw(name_w)        << ""
-		 << setw(size_w)        << "size"
-		 << setw(mpi_commit_w)  << "mpi_commit"
-		 << setw(farc_commit_w) << "farc_commit"
-		 << setw(mpi_pack_w)    << "mpi_pack"
-		 << setw(farc_pack_w)   << "farc_pack"
-		 << setw(mpi_unpack_w)  << "mpi_unpack"
-		 << setw(farc_unpack_w) << "farc_unpack"
+	cout << setw(name_w)         << ""
+		 << setw(size_w)         << "size"
+		 << setw(mpi_commit_w)   << "mpi_commit"
+		 << setw(farc_commit_w)  << "farc_commit"
+		 << setw(mpi_pack_w)     << "mpi_pack"
+		 << setw(farc_pack_w)    << "farc_pack"
+		 << setw(mpi_unpack_w)   << "mpi_unpack"
+		 << setw(farc_unpack_w)  << "farc_unpack"
+		 << setw(pack_spdup_w)   << "pack_spdup"
+		 << setw(unpack_spdup_w) << "unpack_spdup"
 		 << endl;
 	
 	// Produce report
 	for (unsigned int i=0; i<datatypes.size(); i++) {
 		HRT_TIMESTAMP_T start, stop;
 
-		Datatype *datatype = datatypes[i];
+		Datatype datatype = datatypes[i];
 
 		double mpi_commit_time   = 0.0;
 		double farc_commit_time  = 0.0;
@@ -276,8 +378,8 @@ void produce_report() {
 		double mpi_unpack_time   = 0.0;
 		double farc_unpack_time  = 0.0;
 
-		int size = datatype->farc->getSize();
-		int extent = datatype->farc->getExtent();
+		int size = datatype.farc->getSize();
+		int extent = datatype.farc->getExtent();
 
 		void *mpi_bigbuf, *mpi_smallbuf;
 		alloc_buffer(size, &mpi_smallbuf, ALIGNMENT);
@@ -289,62 +391,70 @@ void produce_report() {
 
 
 		// mpi_commit
-		TIME_HOT( MPI_Type_commit(&(datatype->mpi)), mpi_commit_time );
+		TIME_HOT( MPI_Type_commit(&(datatype.mpi)), mpi_commit_time );
 
 		// farc_commit
-		TIME_HOT( DDT_Commit(datatype->farc), farc_commit_time );
+		TIME_HOT( DDT_Commit(datatype.farc), farc_commit_time );
 
 		// mpi_pack
 		init_buffer(extent, mpi_bigbuf, true);
 		init_buffer(size, mpi_smallbuf, false);
-		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf, 1, datatype->mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
+		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf, 1, datatype.mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
 
 		// farc pack
 		init_buffer(extent, farc_bigbuf, true);
 		init_buffer(size, farc_smallbuf, false);
-		TIME_HOT( DDT_Pack(farc_bigbuf, farc_smallbuf, datatype->farc, 1), farc_pack_time);
+		TIME_HOT( DDT_Pack(farc_bigbuf, farc_smallbuf, datatype.farc, 1), farc_pack_time);
 
 		// verify
 		if (compare_buffers(extent, mpi_bigbuf, farc_bigbuf) != 0) {
 			fprintf(stderr, "Error: %s: MPI and FARC input buffers differ after packing\n", 
-				datatype->farc->toString().c_str());
+				datatype.farc->toString().c_str());
 		}
 		if (compare_buffers(size, mpi_smallbuf, farc_smallbuf) != 0) {
 			fprintf(stderr, "Error: %s: MPI and FARC output buffers differ after packing\n", 
-				datatype->farc->toString().c_str());
+				datatype.farc->toString().c_str());
 		}
 
 
 		// mpi_unpack
 		init_buffer(size, mpi_smallbuf, true);
 		init_buffer(extent, mpi_bigbuf, false);
-		TIME_HOT( {int pos=0; MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype->mpi, MPI_COMM_WORLD);}, mpi_unpack_time);
+		TIME_HOT( {int pos=0; MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype.mpi, MPI_COMM_WORLD);}, mpi_unpack_time);
 
 		// farc unpack
 		init_buffer(size, farc_smallbuf, true);
 		init_buffer(extent, farc_bigbuf, false);
-		TIME_HOT(DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype->farc, 1), farc_unpack_time);
+		TIME_HOT(DDT_Unpack(farc_smallbuf, farc_bigbuf, datatype.farc, 1), farc_unpack_time);
 
 		// verify
 		if (compare_buffers(size, mpi_smallbuf, farc_smallbuf) != 0) {
 			fprintf(stderr, "Error: %s: MPI and FARC input buffers differ after unpacking\n", 
-				datatype->farc->toString().c_str());
+				datatype.farc->toString().c_str());
 		}
 		if (compare_buffers(extent, mpi_bigbuf, farc_bigbuf) != 0) {
 			fprintf(stderr, "Error: %s: MPI and FARC output buffers differ after unpacking\n", 
-				datatype->farc->toString().c_str());
+				datatype.farc->toString().c_str());
 		}
 
+		double pack_speedup   = ((mpi_pack_time/farc_pack_time)-1)*100;
+		double unpack_speedup = ((mpi_unpack_time/farc_unpack_time)-1)*100;
 
 		// output
-		cout << setw(name_w)        << datatype->farc->toString().c_str()
-			 << setw(size_w)        << size
-			 << setw(mpi_commit_w)  << setiosflags(ios::fixed) << setprecision(2) << mpi_commit_time
-			 << setw(farc_commit_w) << setiosflags(ios::fixed) << setprecision(2) << farc_commit_time
-			 << setw(mpi_pack_w)    << setiosflags(ios::fixed) << setprecision(3) << mpi_pack_time
-			 << setw(farc_pack_w)   << setiosflags(ios::fixed) << setprecision(3) << farc_pack_time
-			 << setw(mpi_unpack_w)  << setiosflags(ios::fixed) << setprecision(3) << mpi_unpack_time
-			 << setw(farc_unpack_w) << setiosflags(ios::fixed) << setprecision(3) << farc_unpack_time
+		cout.flags(std::ios::left);
+		cout << setw(name_w)        << datatype.farc->toString().c_str();
+
+		cout.flags(ios::right);
+		cout.flags(ios::fixed);
+		cout << setw(size_w)           << size
+			 << setw(mpi_commit_w)     << setprecision(2) << mpi_commit_time
+			 << setw(farc_commit_w)    << setprecision(2) << farc_commit_time
+			 << setw(mpi_pack_w)       << setprecision(3) << mpi_pack_time
+			 << setw(farc_pack_w)      << setprecision(3) << farc_pack_time
+			 << setw(mpi_unpack_w)     << setprecision(3) << mpi_unpack_time
+			 << setw(farc_unpack_w)    << setprecision(3) << farc_unpack_time
+			 << setw(pack_spdup_w-1)   << setprecision(1) << pack_speedup     << "%"
+			 << setw(unpack_spdup_w-1) << setprecision(1) << unpack_speedup   << "%"
 			 << endl;
 
 		// free buffers
@@ -356,13 +466,11 @@ void produce_report() {
 
 	// free datatypes
 	for (unsigned int i=0; i<datatypes.size(); i++) {
-		Datatype *datatype = datatypes[i];
+		Datatype datatype = datatypes[i];
 
 		// TODO: Also delete children
-		DDT_Free(datatype->farc);
-		MPI_Type_free(&(datatype->mpi));
-		
-		free(datatype);
+		DDT_Free(datatype.farc);
+		MPI_Type_free(&(datatype.mpi));
 	}
 }
 
