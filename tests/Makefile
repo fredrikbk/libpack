@@ -5,6 +5,8 @@ LDLIBS=$(shell llvm-config --libs all)
 LDFLAGS=$(shell llvm-config --ldflags) #-dynamic
 CPPFLAGS= -O3 $(shell llvm-config --cppflags) -I../..
 
+FARCDIR=..
+
 TESTS=$(shell ls *.cpp | sed -e 's/.cpp$$//g';)
 
 all: $(TESTS)
@@ -15,11 +17,11 @@ run: all
 %.o: %.cpp
 	$(CXX) -c -o $@ $< $(CPPFLAGS)
 
-%: %.o ../ddt_jit.o
+%: %.o $(FARCDIR)/libfarc.a
 	$(CXX) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
-../ddt_jit.o: ../ddt_jit.cpp ../ddt_jit.hpp
-	make -C ../ ddt_jit.o
+$(FARCDIR)/libfarc.a: $(FARCDIR)/*.cpp $(FARCDIR)/*.hpp
+	make -C $(FARCDIR) libfarc.a
 
 -include Makefile.deps
 

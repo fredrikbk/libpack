@@ -84,7 +84,7 @@ int compare_buffers(size_t size, char** mpi_inbuf, char** farc_inbuf, char** mpi
 int inspect_buffers(size_t size, char** mpi_inbuf, char** farc_inbuf, char** mpi_outbuf, char** farc_outbuf) {
 
     printf("\n");
-    for (int i=0; i<size; i++) {
+    for (unsigned int i=0; i<size; i++) {
         printf("mpi_inbuf[%i] = %i farc_inbuf[%i] = %i mpi_outbuf[%i] = %i farc_outbuf[%i] = %i (@%p)\n", 
                 i, (*mpi_inbuf)[i], i, (*farc_inbuf)[i], i, (*mpi_outbuf)[i], i, (*farc_outbuf)[i], &((*farc_outbuf)[i]));
     }   

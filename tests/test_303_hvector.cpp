@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
     MPI_Pack(mpi_inbuf+10*sizeof(int), 1, newtype, mpi_outbuf, 20*sizeof(int), &position, MPI_COMM_WORLD);
 
     int res = compare_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
-    inspect_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+    // inspect_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
     free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
     test_result(res);
 

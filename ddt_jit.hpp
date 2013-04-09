@@ -9,7 +9,6 @@
 #define LLVM_OPTIMIZE  0 
 #define VECTOR_UNROLL  0
 
-#define TIME 0
 #define DDT_OUTPUT     0 
 
 // LLVM_OUTPUT should be picked up from the environment by the build system

@@ -7,23 +7,22 @@ LLVM_OUTPUT ?= 0
 
 CONFIGVARS = -DPACKVAR=$(PACKVAR) -DLLVM_OUTPUT=$(LLVM_OUTPUT)
 
+FARC= ddt_jit.o codegen_common.o codegen_primitive.o codegen_contiguous.o codegen_vector.o codegen_indexed.o
 
 LDLIBS+=$(shell llvm-config --libs all)
 LDFLAGS+=$(shell llvm-config --ldflags)
-CFLAGS+=$(shell llvm-config --cppflags) -O3 -g3
+CPPFLAGS+=$(shell llvm-config --cppflags) -O3 -g3
 
-farc: libfarcinterposer.a
-
-farc: ddt_jit.o interposer.o interposerf.o interposer_common.o
+farc: libfarcinterposer.a libfarc.a
 
 test: farc
 	make run -C tests
 	make -C pmpi-tests
 
-#libfarc.a: ddt_jit.o
-#	ar rcs libfarc.a $^
+libfarc.a: $(FARC)
+	ar rcs libfarc.a $^
 
-libfarcinterposer.a: interposer.o interposer_common.o ddt_jit.o
+libfarcinterposer.a: interposer.o interposer_common.o $(FARC)
 	ar rcs libfarcinterposer.a $^
 
 interposer.o: interposer.c interposer_common.h
@@ -33,14 +32,14 @@ interposerf.o: interposerf.f interposer_common.h
 	$(F77) -c $< -o $@
 
 interposer_common.o: interposer_common.cpp ddt_jit.hpp
-	$(CXX) $(CFLAGS) -DHRT_ARCH=2 -c $< -o $@
+	$(CXX) $(CPPFLAGS) -DHRT_ARCH=2 -c $< -o $@
 
-ddt_jit.o: ddt_jit.cpp ddt_jit.hpp
-	$(CXX) $(CFLAGS) $(CONFIGVARS) -DHRT_ARCH=2 -c ddt_jit.cpp -o ddt_jit.o
+%.o: %.cpp codegen.hpp codegen_common.hpp
+	$(CXX) -c -o $@ $< $(CPPFLAGS) $(CONFIGVARS) -DHRT_ARCH=2
 
 
 clean:
-	rm -f *.o libfarcinterposer.a
+	rm -f *.o *.a
 	make -C tests clean
 	make -C pmpi-tests clean
 	svn status
