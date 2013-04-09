@@ -324,7 +324,7 @@ static inline void vectorCodegenNormal(Value* inbuf, Value* incount, Value* outb
     // Move the the extend-stride ptr back Extent(Basetype) * Stride - Size(Basetype) * Blocklen  
     if (pack) {
         nextin1 = Builder.CreateAdd(in1, constNode((long)(elemstride_in * (count-1) + elemstride_out)));
-	nextin1->setName("nextin1");
+	    nextin1->setName("nextin1");
     }
     else {
 	nextout1 = Builder.CreateAdd(out1, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
@@ -1095,7 +1095,8 @@ void HVectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf
 }
 
 int HVectorDatatype::getExtent() {
-    return (this->Count-1)*this->Stride + this->Blocklen*this->Basetype->getExtent();
+    if (this->Stride > 0) return (this->Count-1)*this->Stride + this->Blocklen*this->Basetype->getExtent();
+    else return (-((this->Count-1)*this->Stride + this->Blocklen*this->Basetype->getExtent()) + this->Count*this->Blocklen*this->Basetype->getExtent());
 }
 
 int HVectorDatatype::getSize() {
@@ -1632,7 +1633,7 @@ void generate_unpack_function(Datatype* ddt) {
 
 void DDT_Commit(Datatype* ddt) {
 #if DDT_OUTPUT
-    ddt->print("");
+    ddt->print();
 #endif
 #if !LAZY
     generate_pack_function(ddt);
