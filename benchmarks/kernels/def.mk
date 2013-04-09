@@ -1,11 +1,11 @@
-CXX=g++
+CXX=CC
 
 FARCDIR=../../..
 
 FARCLIBS=$(shell llvm-config --libs all)
-FARCLDFLAGS=$(shell llvm-config --ldflags)
+FARCLDFLAGS=-dynamic $(shell llvm-config --ldflags)
 
-CPPFLAGS= -O3 -march=core-avx-i -I/usr/include/mpi -I$(FARCDIR) $(shell llvm-config --cppflags) -DNUM=$(NUM)
+CPPFLAGS=-O3 -march=native -I/usr/include/mpi -I$(FARCDIR) $(shell llvm-config --cppflags) -DNUM=$(NUM)
 
 .SUFFIXES:
 .PRECIOUS: %.s %.o %.ll
@@ -29,4 +29,4 @@ $(FARCDIR)/ddt_jit.o: $(FARCDIR)/ddt_jit.cpp $(FARCDIR)/ddt_jit.hpp
 	$(CXX) -o $@ $^ $(FARCLDFLAGS) $(FARCLIBS)
 
 %_mpi: %_mpi.o ../driver.o
-	mpic++ -o $@ $^ 
+	$(CXX) -o $@ $^ 

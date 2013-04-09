@@ -348,36 +348,43 @@ int main( int argc, char **argv, char *envp[]) {
     DIM3 = 12;
 
     wrapper_timing_nas_lu( DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], MPI_COMM_WORLD );
+    printf("NAS LU (DIM %i) finished without error\n", DIM2);
 
     DIM2 = 33;
     DIM3 = 33;
 
     wrapper_timing_nas_lu( DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], MPI_COMM_WORLD );
+    printf("NAS LU (DIM %i) finished without error\n", DIM2);
 
     DIM2 = 64;
     DIM3 = 64;
 
     wrapper_timing_nas_lu( DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], MPI_COMM_WORLD );
+    printf("NAS LU (DIM %i) finished without error\n", DIM2);
 
     DIM2 = 102;
     DIM3 = 102;
 
     wrapper_timing_nas_lu( DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], MPI_COMM_WORLD );
+    printf("NAS LU (DIM %i) finished without error\n", DIM2);
 
     DIM2 = 162;
     DIM3 = 162;
 
     wrapper_timing_nas_lu( DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], MPI_COMM_WORLD );
+    printf("NAS LU (DIM %i) finished without error\n", DIM2);
 
     DIM2 = 408;
     DIM3 = 408;
 
     wrapper_timing_nas_lu( DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], MPI_COMM_WORLD );
+    printf("NAS LU (DIM %i) finished without error\n", DIM2);
 
     DIM2 = 1020;
     DIM3 = 1020;
 
     wrapper_timing_nas_lu( DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], MPI_COMM_WORLD );
+    printf("NAS LU (DIM %i) finished without error\n", DIM2);
 
 
     printf("NAS LU finished without error\n");
@@ -391,33 +398,37 @@ int main( int argc, char **argv, char *envp[]) {
     DIM3 = 18;
 
     wrapper_timing_nas_mg( DIM1, DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], local_comm_pp );
+    printf("NAS MG (DIM1 %i, DIM2 %i, DIM3 %i) finished without error\n", DIM1, DIM2, DIM3);
 
     DIM1 = 130;
     DIM2 = 66;
     DIM3 = 66;
 
     wrapper_timing_nas_mg( DIM1, DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], local_comm_pp );
+    printf("NAS MG (DIM1 %i, DIM2 %i, DIM3 %i) finished without error\n", DIM1, DIM2, DIM3);
 
     DIM1 = 258;
     DIM2 = 130;
     DIM3 = 130;
 
     wrapper_timing_nas_mg( DIM1, DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], local_comm_pp );
+    printf("NAS MG (DIM1 %i, DIM2 %i, DIM3 %i) finished without error\n", DIM1, DIM2, DIM3);
 
     DIM1 = 514;
     DIM2 = 258;
     DIM3 = 258;
 
     wrapper_timing_nas_mg( DIM1, DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], local_comm_pp );
+    printf("NAS MG (DIM1 %i, DIM2 %i, DIM3 %i) finished without error\n", DIM1, DIM2, DIM3);
 
     printf("NAS MG finished without error\n");
 
+#if 0
 //! ====================================================================
 //! ============================ LAMMPS_full ===========================
 //! ====================================================================
 
 // It is too huge...
-#if 0
 
 //! peptide example with 2 process (maximum)
     icount1 = 3062;
@@ -443,7 +454,6 @@ int main( int argc, char **argv, char *envp[]) {
     printf("c\n");
 
     printf("LAMMPS_full finished without error\n");
-#endif 
 
 //! ====================================================================
 //! =========================== LAMMPS_atomic ==========================
@@ -503,7 +513,6 @@ int main( int argc, char **argv, char *envp[]) {
 //! ============================ SPECFEM3D_cm ==========================
 //! ====================================================================
 // too huge
-#if 0
 
 //! 10x10x6, c=4
     icount1 = 11797;
@@ -539,7 +548,6 @@ int main( int argc, char **argv, char *envp[]) {
 
 
     printf("SPECFEM3D_cm finished without error\n");
-#endif
 //! ====================================================================
 //! ============================ SPECFEM3D_mt ==========================
 //! ====================================================================
@@ -572,6 +580,7 @@ int main( int argc, char **argv, char *envp[]) {
 
     wrapper_timing_specfem3d_mt( DIM1, DIM2, DIM3, outer_loop, inner_loop, filehandle_correctness, filehandle_debug, &testname[0][0], local_comm_pp );
 
+#endif
 
   } //! of myrank < 2
 

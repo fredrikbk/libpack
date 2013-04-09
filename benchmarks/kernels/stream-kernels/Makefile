@@ -4,7 +4,7 @@ TESTS=$(shell ls *.cpp | sed -e 's/.cpp$$//g';)
 all: $(TESTS)
 
 run: all
-	@for b in $(TESTS); do ./$$b; done
+	@for b in $(TESTS); do aprun ./$$b; done
 
 ../driver.o: ../driver.cpp
 	make -C ../ driver.o

@@ -1,7 +1,7 @@
-CXX=mpic++
+CXX=CC -dynamic
 
 LDLIBS=$(shell llvm-config --libs all)
-LDFLAGS=$(shell llvm-config --ldflags) #-dynamic
+LDFLAGS=$(shell llvm-config --ldflags) -dynamic
 CPPFLAGS=-DHRT_ARCH=2 -O3 -g3 $(shell llvm-config --cppflags) -I/usr/include/mpi -I../.. 
 
 FARC=-L../.. -lfarcinterposer
