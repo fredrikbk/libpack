@@ -64,13 +64,13 @@ FunctionType *FT;
 /* Datatype */
 Datatype::~Datatype() {
     if (this->pack != NULL) {
-        TheExecutionEngine->freeMachineCodeForFunction(this->FPack);
-        this->FPack->eraseFromParent();
+        TheExecutionEngine->freeMachineCodeForFunction(this->fpack);
+        this->fpack->eraseFromParent();
         this->pack = NULL;
     }
     if (this->unpack != NULL) {
-        TheExecutionEngine->freeMachineCodeForFunction(this->FUnpack);
-        this->FUnpack->eraseFromParent();
+        TheExecutionEngine->freeMachineCodeForFunction(this->funpack);
+        this->funpack->eraseFromParent();
         this->unpack = NULL;
     }
 }
@@ -118,6 +118,8 @@ static inline void postProcessFunction(Function *F) {
 }
 
 void Datatype::compile(CompilationType type) {
+    // Compress the datatype, by substituting datatypes for
+    // equivalent, but more compact, datatypes
     Datatype *ddt = this;
 
     bool pack   = (type == PACK_UNPACK || type == PACK)   ? true : false;
@@ -137,7 +139,7 @@ void Datatype::compile(CompilationType type) {
 
         ddt->pack = (void (*)(void*,int,void*))(intptr_t)
             TheExecutionEngine->getPointerToFunction(F);
-        ddt->FPack = F;
+        ddt->fpack = F;
     }
 
     if (unpack) {
@@ -155,7 +157,7 @@ void Datatype::compile(CompilationType type) {
 
         ddt->unpack = (void (*)(void*,int,void*))(intptr_t)
             TheExecutionEngine->getPointerToFunction(F);
-        ddt->FUnpack = F;
+        ddt->funpack = F;
     }
 }
 
@@ -166,44 +168,44 @@ void Datatype::print() {
 
 /* PrimitiveDatatype */
 PrimitiveDatatype::PrimitiveDatatype(PrimitiveDatatype::PrimitiveType type) : Datatype() {
-    this->Type = type;
+    this->type = type;
 
-    if (Type == BYTE)   this->Extent = 1;
-    if (Type == CHAR)   this->Extent = 1;
-    if (Type == DOUBLE) this->Extent = sizeof(double);
-    if (Type == FLOAT)  this->Extent = sizeof(float);
-    if (Type == INT)    this->Extent = sizeof(int);
+    if (type == BYTE)   this->extent = 1;
+    if (type == CHAR)   this->extent = 1;
+    if (type == DOUBLE) this->extent = sizeof(double);
+    if (type == FLOAT)  this->extent = sizeof(float);
+    if (type == INT)    this->extent = sizeof(int);
     //TODO add more. Remember to also add them to the print function.
 
-    this->Size = this->Extent;
+    this->size = this->extent;
 }
 
 PrimitiveDatatype* PrimitiveDatatype::clone() {
-    PrimitiveDatatype* t_new = new PrimitiveDatatype(this->Type);
+    PrimitiveDatatype* t_new = new PrimitiveDatatype(this->type);
     return t_new;
 }
 
 void PrimitiveDatatype::packCodegen(Value* inbuf, Value* incount,
                                      Value* outbuf) {
-    codegenPrimitive(inbuf, incount, outbuf, this->Size, this->Type);
+    codegenPrimitive(inbuf, incount, outbuf, this->size, this->type);
 }
 
 void PrimitiveDatatype::unpackCodegen(Value* inbuf, Value* incount,
                                        Value* outbuf) {
-    codegenPrimitive(inbuf, incount, outbuf, this->Size, this->Type);
+    codegenPrimitive(inbuf, incount, outbuf, this->size, this->type);
 }
 
 int PrimitiveDatatype::getExtent() {
-    return this->Extent;
+    return this->extent;
 }
 
 int PrimitiveDatatype::getSize() {
-    return this->Size;
+    return this->size;
 }
 
 string PrimitiveDatatype::toString() {
     string res = "";
-    switch (this->Type) {
+    switch (this->type) {
     case BYTE:
         res.append("byte");
         break;
@@ -229,92 +231,90 @@ string PrimitiveDatatype::toString() {
 
 /* Class ContiguousDatatype */
 ContiguousDatatype::ContiguousDatatype(Datatype* type, int count) {
-    this->Basetype = type->clone();
-    this->Count = count;
+    this->basetype = type->clone();
+    this->count = count;
 }
 
 ContiguousDatatype::~ContiguousDatatype(void) {
-    delete this->Basetype;
+    delete this->basetype;
 }
 
 ContiguousDatatype* ContiguousDatatype::clone() {
-    ContiguousDatatype* t_new = new ContiguousDatatype(this->Basetype, this->Count);
+    ContiguousDatatype* t_new = new ContiguousDatatype(this->basetype, this->count);
     return t_new;
 }
 
 void ContiguousDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenContiguous(inbuf, incount, outbuf, this->Basetype, 
-                      this->Basetype->getExtent(), this->Basetype->getSize(), 
-                      this->Count, true);
+    codegenContiguous(inbuf, incount, outbuf, this->basetype, 
+                      this->basetype->getExtent(), this->basetype->getSize(), 
+                      this->count, true);
 }
 
 void ContiguousDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenContiguous(inbuf, incount, outbuf, this->Basetype, 
-                      this->Basetype->getSize(), this->Basetype->getExtent(), 
-                      this->Count, false);
+    codegenContiguous(inbuf, incount, outbuf, this->basetype, 
+                      this->basetype->getSize(), this->basetype->getExtent(), 
+                      this->count, false);
 }
 
 int ContiguousDatatype::getExtent() {
-    return this->Count * this->Basetype->getExtent();
+    return this->count * this->basetype->getExtent();
 }
 
 int ContiguousDatatype::getSize() {
-    return this->Count * this->Basetype->getSize();
+    return this->count * this->basetype->getSize();
 }
 
 string ContiguousDatatype::toString() {
     stringstream res;
-    res << "ctg(" << this->Count << ")[" << Basetype->toString() << "]";
+    res << "ctg(" << this->count << ")[" << basetype->toString() << "]";
     return res.str();
 }
 
 
 /* Class VectorDatatype */
 VectorDatatype::VectorDatatype(Datatype* type, int count, int blocklen, int stride) {
-
-    this->Basetype = type->clone();
-    this->Count = count;
-    this->Blocklen = blocklen;
-    this->Stride = stride;
-
+    this->count = count;
+    this->blocklen = blocklen;
+    this->stride = stride;
+    this->basetype = type->clone();
 }
 
 VectorDatatype::~VectorDatatype(void) {
-    delete this->Basetype;
+    delete this->basetype;
 }
 
 VectorDatatype* VectorDatatype::clone() {
-    VectorDatatype* t_new = new VectorDatatype(this->Basetype, this->Count, 
-                                               this->Blocklen, this->Stride);
+    VectorDatatype* t_new = new VectorDatatype(this->basetype, this->count, 
+                                               this->blocklen, this->stride);
 
     return t_new;
 }
 
 void VectorDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenVector(inbuf, incount, outbuf, this->Basetype, this->Count,
-                  this->Blocklen, this->Basetype->getExtent() * this->Stride,
-                  this->Basetype->getSize() * this->Blocklen, true);
+    codegenVector(inbuf, incount, outbuf, this->basetype, this->count,
+                  this->blocklen, this->basetype->getExtent() * this->stride,
+                  this->basetype->getSize() * this->blocklen, true);
 }
 
 void VectorDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenVector(inbuf, incount, outbuf, this->Basetype, this->Count,
-                  this->Blocklen, this->Basetype->getSize() * this->Blocklen,
-                  this->Basetype->getExtent() * this->Stride, false);
+    codegenVector(inbuf, incount, outbuf, this->basetype, this->count,
+                  this->blocklen, this->basetype->getSize() * this->blocklen,
+                  this->basetype->getExtent() * this->stride, false);
 }
 
 int VectorDatatype::getExtent() {
-    return (this->Count - 1) * this->Basetype->getExtent() *
-        this->Stride + this->Blocklen * this->Basetype->getExtent();
+    return (this->count - 1) * this->basetype->getExtent() *
+        this->stride + this->blocklen * this->basetype->getExtent();
 }
 
 int VectorDatatype::getSize() {
-    return this->Count * this->Blocklen*this->Basetype->getSize();
+    return this->count * this->blocklen*this->basetype->getSize();
 }
 
 string VectorDatatype::toString() {
     stringstream res;
-    res << "vec(" << this->Count << " " << this->Blocklen << " "
-        << this->Stride << ")[" << Basetype->toString() << "]";
+    res << "vec(" << this->count << " " << this->blocklen << " "
+        << this->stride << ")[" << basetype->toString() << "]";
     return res.str();
 }
 
@@ -322,87 +322,87 @@ string VectorDatatype::toString() {
 /* Class HVectorDatatype */
 HVectorDatatype::HVectorDatatype(Datatype* type, int count, int blocklen, int stride) {
 
-    this->Basetype = type->clone();
-    this->Count = count;
-    this->Blocklen = blocklen;
-    this->Stride = stride;
+    this->basetype = type->clone();
+    this->count = count;
+    this->blocklen = blocklen;
+    this->stride = stride;
 
 } 
 
 HVectorDatatype* HVectorDatatype::clone() {
-    HVectorDatatype* t_new = new HVectorDatatype(this->Basetype, this->Count, this->Blocklen, this->Stride);
+    HVectorDatatype* t_new = new HVectorDatatype(this->basetype, this->count, this->blocklen, this->stride);
     return t_new;
 }
 
 HVectorDatatype::~HVectorDatatype(void) {
-    delete this->Basetype;
+    delete this->basetype;
 }
 
 void HVectorDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenVector(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
-            this->Stride, this->Basetype->getSize() * this->Blocklen, true);
+    codegenVector(inbuf, incount, outbuf, this->basetype, this->count, this->blocklen,
+            this->stride, this->basetype->getSize() * this->blocklen, true);
 }
 
 void HVectorDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenVector(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
-            this->Basetype->getSize() * this->Blocklen, this->Stride, false);
+    codegenVector(inbuf, incount, outbuf, this->basetype, this->count, this->blocklen,
+            this->basetype->getSize() * this->blocklen, this->stride, false);
 }
 
 int HVectorDatatype::getExtent() {
-    if (this->Stride > 0) return (this->Count-1)*this->Stride + this->Blocklen*this->Basetype->getExtent();
-    else return (-((this->Count-1)*this->Stride + this->Blocklen*this->Basetype->getExtent()) + this->Count*this->Blocklen*this->Basetype->getExtent());
+    if (this->stride > 0) return (this->count-1)*this->stride + this->blocklen*this->basetype->getExtent();
+    else return (-((this->count-1)*this->stride + this->blocklen*this->basetype->getExtent()) + this->count*this->blocklen*this->basetype->getExtent());
 }
 
 int HVectorDatatype::getSize() {
-    return this->Count * this->Blocklen*this->Basetype->getSize();
+    return this->count * this->blocklen*this->basetype->getSize();
 }
 
 string HVectorDatatype::toString() {
     stringstream res;
-    res << "hvec(" << this->Count << " " << this->Blocklen << " " << this->Stride << ")[" << Basetype->toString() << "]";
+    res << "hvec(" << this->count << " " << this->blocklen << " " << this->stride << ")[" << basetype->toString() << "]";
     return res.str();
 }
 
 
 /* Class IndexedBlockDatatype */
 IndexedBlockDatatype::IndexedBlockDatatype(int count, int blocklen, int* displ, Datatype* basetype) : Datatype() {
-    this->Count = count;
-    this->Basetype = basetype->clone();
-    this->Blocklen = blocklen;
-    for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
+    this->count = count;
+    this->basetype = basetype->clone();
+    this->blocklen = blocklen;
+    for (int i=0; i<count; i++) this->displs.push_back(displ[i]);
 }
 
 IndexedBlockDatatype::~IndexedBlockDatatype(void) {
-    delete this->Basetype;
+    delete this->basetype;
 }
 
 IndexedBlockDatatype* IndexedBlockDatatype::clone() {
-    IndexedBlockDatatype* t_new = new IndexedBlockDatatype(this->Count, this->Blocklen, &(this->Displ[0]), this->Basetype);
+    IndexedBlockDatatype* t_new = new IndexedBlockDatatype(this->count, this->blocklen, &(this->displs[0]), this->basetype);
     return t_new;
 }
 
 void IndexedBlockDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenIndexedBlock(outbuf, inbuf, incount, this->getExtent(), this->Count,
-                        this->Blocklen, this->Basetype, this->Displ, true);
+    codegenIndexedBlock(outbuf, inbuf, incount, this->getExtent(), this->count,
+                        this->blocklen, this->basetype, this->displs, true);
 }
 
 void IndexedBlockDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenIndexedBlock(inbuf, outbuf, incount, this->getExtent(), this->Count,
-                        this->Blocklen, this->Basetype, this->Displ, false);
+    codegenIndexedBlock(inbuf, outbuf, incount, this->getExtent(), this->count,
+                        this->blocklen, this->basetype, this->displs, false);
 }
 
 int IndexedBlockDatatype::getExtent() {
 
-    if (this->Count == 0) return 0;
+    if (this->count == 0) return 0;
 
-    int bext = this->Basetype->getExtent();
+    int bext = this->basetype->getExtent();
 
-    int ub = this->Displ[0] * bext + this->Blocklen * bext;
-    int lb = this->Displ[0] * bext;
+    int ub = this->displs[0] * bext + this->blocklen * bext;
+    int lb = this->displs[0] * bext;
 
-    for (int i=0; i<this->Count; i++) {
-        int tmp_ub = this->Displ[i] * bext + this->Blocklen * bext;
-        int tmp_lb = this->Displ[i] * bext;
+    for (int i=0; i<this->count; i++) {
+        int tmp_ub = this->displs[i] * bext + this->blocklen * bext;
+        int tmp_lb = this->displs[i] * bext;
         if (tmp_ub > ub) ub = tmp_ub;
         if (tmp_lb < lb) lb = tmp_lb;
     }
@@ -414,9 +414,9 @@ int IndexedBlockDatatype::getExtent() {
 int IndexedBlockDatatype::getSize() {
 
     int sum = 0;
-    int bsize = this->Basetype->getSize();
-    for (int i=0; i<this->Count; i++) {
-        sum += bsize * this->Blocklen;
+    int bsize = this->basetype->getSize();
+    for (int i=0; i<this->count; i++) {
+        sum += bsize * this->blocklen;
     }
 
     return sum;
@@ -425,14 +425,14 @@ int IndexedBlockDatatype::getSize() {
 
 string IndexedBlockDatatype::toString() {
     stringstream res;
-    res << "idxb(" << this->Count << " " << this->Blocklen << ")[";
-    for (unsigned int i=0; i<Displ.size(); i++) {
-        res << Displ[i];
-        if (i <Displ.size() - 1) {
+    res << "idxb(" << this->count << " " << this->blocklen << ")[";
+    for (unsigned int i=0; i<displs.size(); i++) {
+        res << displs[i];
+        if (i <displs.size() - 1) {
             res << " ";
         }
     }
-    res << "]{" << Basetype->toString() << "}";
+    res << "]{" << basetype->toString() << "}";
     return res.str();
 }
 
@@ -440,42 +440,42 @@ string IndexedBlockDatatype::toString() {
 /* Class HIndexedDatatype */
 HIndexedDatatype::HIndexedDatatype(int count, int* blocklen, long* displ, Datatype* basetype) : Datatype() {
 
-    this->Count = count;
-    this->Basetype = basetype->clone();
-    for (int i=0; i<count; i++) this->Blocklen.push_back(blocklen[i]);
-    for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
+    this->count = count;
+    this->basetype = basetype->clone();
+    for (int i=0; i<count; i++) this->blocklens.push_back(blocklen[i]);
+    for (int i=0; i<count; i++) this->displs.push_back(displ[i]);
 
 }
 
 HIndexedDatatype::~HIndexedDatatype(void) {
-    delete this->Basetype;
+    delete this->basetype;
 }
 
 HIndexedDatatype* HIndexedDatatype::clone() {
-    HIndexedDatatype* t_new = new HIndexedDatatype(this->Count, &(this->Blocklen[0]), &(this->Displ[0]), this->Basetype);
+    HIndexedDatatype* t_new = new HIndexedDatatype(this->count, &(this->blocklens[0]), &(this->displs[0]), this->basetype);
     return t_new;
 }
 
 void HIndexedDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenHindexed(outbuf, inbuf, incount, this->getExtent(), this->Count,
-                    this->Basetype, this->Blocklen, this->Displ, true);
+    codegenHindexed(outbuf, inbuf, incount, this->getExtent(), this->count,
+                    this->basetype, this->blocklens, this->displs, true);
 }
 
 void HIndexedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenHindexed(inbuf, outbuf, incount, this->getExtent(), this->Count,
-                    this->Basetype, this->Blocklen, this->Displ, false);
+    codegenHindexed(inbuf, outbuf, incount, this->getExtent(), this->count,
+                    this->basetype, this->blocklens, this->displs, false);
 }
 
 int HIndexedDatatype::getExtent() {
-    if (this->Count == 0) return 0;
+    if (this->count == 0) return 0;
 
-    int bext = this->Basetype->getExtent();
-    int ub = this->Displ[0] + bext * this->Blocklen[0];
-    int lb = this->Displ[0];
+    int bext = this->basetype->getExtent();
+    int ub = this->displs[0] + bext * this->blocklens[0];
+    int lb = this->displs[0];
 
-    for (int i=0; i<this->Count; i++) {
-        int tmp_ub = this->Displ[i] + bext * this->Blocklen[i];
-        int tmp_lb = this->Displ[i];
+    for (int i=0; i<this->count; i++) {
+        int tmp_ub = this->displs[i] + bext * this->blocklens[i];
+        int tmp_lb = this->displs[i];
         if (tmp_ub > ub) ub = tmp_ub;
         if (tmp_lb < lb) lb = tmp_lb;
     }
@@ -485,9 +485,9 @@ int HIndexedDatatype::getExtent() {
 
 int HIndexedDatatype::getSize() {
     int sum = 0;
-    int bsize = this->Basetype->getSize();
-    for (int i=0; i<this->Count; i++) {
-        sum += bsize * this->Blocklen[i];
+    int bsize = this->basetype->getSize();
+    for (int i=0; i<this->count; i++) {
+        sum += bsize * this->blocklens[i];
     }
 
     return sum;
@@ -496,13 +496,13 @@ int HIndexedDatatype::getSize() {
 string HIndexedDatatype::toString() {
     stringstream res;
     res << "hidx(";
-    for (unsigned int i=0; i<Displ.size(); i++) {
-        res << Displ[i] << "," << Blocklen[i];
-        if (i <Displ.size() - 1) {
+    for (unsigned int i=0; i<displs.size(); i++) {
+        res << displs[i] << "," << blocklens[i];
+        if (i <displs.size() - 1) {
             res << " ";
         }
     }
-    res << ")[" << Basetype->toString() << "]";
+    res << ")[" << basetype->toString() << "]";
     return res.str();
 }
 
@@ -510,39 +510,39 @@ string HIndexedDatatype::toString() {
 /* Class StructDatatype */
 StructDatatype::StructDatatype(int count, int* blocklen, long*  displ,
                                Datatype** types) : Datatype() {
-    this->Count = count;
-    for (int i=0; i<count; i++) Blocklen.push_back(blocklen[i]);
-    for (int i=0; i<count; i++) Displ.push_back(displ[i]);
-    for (int i=0; i<count; i++) Types.push_back(types[i]->clone());
+    this->count = count;
+    for (int i=0; i<count; i++) blocklens.push_back(blocklen[i]);
+    for (int i=0; i<count; i++) displs.push_back(displ[i]);
+    for (int i=0; i<count; i++) basetypes.push_back(types[i]->clone());
 }
 
 StructDatatype::~StructDatatype(void) {
-    for (int i=0; i<this->Count; i++) delete Types[i];
+    for (int i=0; i<this->count; i++) delete basetypes[i];
 }
 
 StructDatatype* StructDatatype::clone() {
-    StructDatatype* t_new = new StructDatatype(this->Count, &(this->Blocklen[0]), &(this->Displ[0]), &(this->Types[0]));
+    StructDatatype* t_new = new StructDatatype(this->count, &(this->blocklens[0]), &(this->displs[0]), &(this->basetypes[0]));
     return t_new;
 }
 
 void StructDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenStruct(outbuf, inbuf, incount, this->getExtent(), this->Count,
-                  this->Blocklen, this->Displ, this->Types, true);
+    codegenStruct(outbuf, inbuf, incount, this->getExtent(), this->count,
+                  this->blocklens, this->displs, this->basetypes, true);
 }
 
 void StructDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenStruct(inbuf, outbuf, incount, this->getExtent(), this->Count,
-                  this->Blocklen, this->Displ, this->Types, false);
+    codegenStruct(inbuf, outbuf, incount, this->getExtent(), this->count,
+                  this->blocklens, this->displs, this->basetypes, false);
 }
 
 int StructDatatype::getExtent() {
-    if (this->Count == 0) return 0;
+    if (this->count == 0) return 0;
 
-    int lb = this->Displ[0];
-    int ub = this->Displ[0] + this->Types[0]->getExtent() * this->Blocklen[0];
-    for (int i=0; i<this->Count; i++) {
-        int tmp_ub = this->Displ[i] + this->Types[i]->getExtent() * this->Blocklen[i];
-        int tmp_lb = this->Displ[i];
+    int lb = this->displs[0];
+    int ub = this->displs[0] + this->basetypes[0]->getExtent() * this->blocklens[0];
+    for (int i=0; i<this->count; i++) {
+        int tmp_ub = this->displs[i] + this->basetypes[i]->getExtent() * this->blocklens[i];
+        int tmp_lb = this->displs[i];
         if (tmp_ub > ub) ub = tmp_ub;
         if (tmp_lb < lb) lb = tmp_lb;
     }
@@ -552,8 +552,8 @@ int StructDatatype::getExtent() {
 
 int StructDatatype::getSize() {
     int sum = 0;
-    for (int i=0; i<this->Count; i++) {
-        sum += this->Types[i]->getSize() * this->Blocklen[i];
+    for (int i=0; i<this->count; i++) {
+        sum += this->basetypes[i]->getSize() * this->blocklens[i];
     }
 
     return sum;
@@ -561,11 +561,11 @@ int StructDatatype::getSize() {
 
 string StructDatatype::toString() {
     stringstream res;
-    res << "struct(" << this->Count << ")";
-    for (unsigned int i=0; i<Displ.size(); i++) {
-        res << "[" << this->Displ[i] << "," << this->Blocklen[i] << "]";
-        res << "{" << this->Types[i]->toString() << "}";
-        if (i <Displ.size() - 1) {
+    res << "struct(" << this->count << ")";
+    for (unsigned int i=0; i<displs.size(); i++) {
+        res << "[" << this->displs[i] << "," << this->blocklens[i] << "]";
+        res << "{" << this->basetypes[i]->toString() << "}";
+        if (i <displs.size() - 1) {
             res << " ";
         }
     }

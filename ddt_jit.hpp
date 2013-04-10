@@ -33,8 +33,8 @@ public:
     void (*pack)(void*, int, void*);
     void (*unpack)(void*, int, void*);
 
-    llvm::Function* FPack;
-    llvm::Function* FUnpack;
+    llvm::Function* fpack;
+    llvm::Function* funpack;
 };
 
 /* Class for primitive types, such as MPI_INT, MPI_BYTE, etc */
@@ -54,9 +54,9 @@ public:
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
 
 private:
-    PrimitiveDatatype::PrimitiveType Type;
-    int Extent;
-    int Size;
+    PrimitiveDatatype::PrimitiveType type;
+    int extent;
+    int size;
 };
 
 /* Class for contiguous types */
@@ -74,8 +74,8 @@ public:
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
 
 private:
-    Datatype* Basetype;
-    int Count;
+    int count;
+    Datatype* basetype;
 };
 
 /* Class for vector types */
@@ -93,10 +93,10 @@ public:
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
 
 private:
-    Datatype* Basetype;
-    int Count;
-    int Blocklen;
-    int Stride;
+    int count;
+    int blocklen;
+    int stride;
+    Datatype* basetype;
 };
 
 /* Class for hvector types */
@@ -114,10 +114,10 @@ public:
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
 
 private:
-    Datatype* Basetype;
-    int Count;
-    int Blocklen;
-    int Stride;
+    int count;
+    int blocklen;
+    int stride;
+    Datatype* basetype;
 };
 
 /* Class for indexed block types */
@@ -135,10 +135,10 @@ public:
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
 
 private:
-    int Count;
-    Datatype* Basetype;
-    int Blocklen;
-    std::vector<int> Displ;
+    int count;
+    int blocklen;
+    std::vector<int> displs;
+    Datatype* basetype;
 };
 
 /* Class for hindexed types */
@@ -156,10 +156,10 @@ public:
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
 
 private:
-    int Count;
-    Datatype* Basetype;
-    std::vector<int> Blocklen;
-    std::vector<long> Displ;
+    int count;
+    std::vector<int> blocklens;
+    std::vector<long> displs;
+    Datatype* basetype;
 };
 
 /* Class for struct types */
@@ -177,10 +177,10 @@ public:
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
 
 private:
-    int Count;
-    std::vector<Datatype*> Types;
-    std::vector<int> Blocklen;
-    std::vector<long> Displ;
+    int count;
+    std::vector<int> blocklens;
+    std::vector<long> displs;
+    std::vector<Datatype*> basetypes;
 };
 
 

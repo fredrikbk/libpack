@@ -34,7 +34,7 @@ interposerf.o: interposerf.f interposer_common.h
 interposer_common.o: interposer_common.cpp ddt_jit.hpp
 	$(CXX) $(CPPFLAGS) -DHRT_ARCH=2 -c $< -o $@
 
-%.o: %.cpp codegen.hpp codegen_common.hpp
+%.o: %.cpp codegen.hpp codegen_common.hpp ddt_jit.hpp
 	$(CXX) -c -o $@ $< $(CPPFLAGS) $(CONFIGVARS) -DHRT_ARCH=2
 
 
