@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
 
     farc::DDT_Init();
     farc::Datatype* t1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::DOUBLE);
-    farc::Datatype* t2 = new farc::VectorDatatype(t1, count, blocklen, stride);
+    farc::Datatype* t2 = new farc::VectorDatatype(count, blocklen, stride, t1);
     farc::DDT_Commit(t2);
 
     MPI_Datatype newtype;

@@ -159,7 +159,7 @@ CONTIGUOUS '(' range ')' '[' datatype ']' {
 		subtype != subtypes->end(); subtype++) {
 		for (int count=$3.start; count <= $3.stop; count += $3.stride) {
 			Datatype type;
-			type.farc = new farc::ContiguousDatatype(subtype->farc, count);
+			type.farc = new farc::ContiguousDatatype(count, subtype->farc);
 			MPI_Type_contiguous(count, subtype->mpi, &(type.mpi));
 			types->push_back(type);
 		}
@@ -182,7 +182,7 @@ VECTOR '(' range range range ')' '[' datatype ']' {
 			for (int blocklen=$4.start; blocklen <= $4.stop; blocklen += $4.stride) {
 				for (int stride=$5.start; stride <= $5.stop; stride += $5.stride) {
 					Datatype type;
-					type.farc = new farc::VectorDatatype(subtype->farc, count, blocklen, stride);
+					type.farc = new farc::VectorDatatype(count, blocklen, stride, subtype->farc);
 					MPI_Type_vector(count, blocklen, stride, subtype->mpi, &(type.mpi));
 					types->push_back(type);
 				}
@@ -207,7 +207,7 @@ HVECTOR '(' range range range ')' '[' datatype ']' {
 			for (int blocklen=$4.start; blocklen <= $4.stop; blocklen += $4.stride) {
 				for (int stride=$5.start; stride <= $5.stop; stride += $5.stride) {
 					Datatype type;
-					type.farc = new farc::HVectorDatatype(subtype->farc, count, blocklen, stride);
+					type.farc = new farc::HVectorDatatype(count, blocklen, stride, subtype->farc);
 					MPI_Type_hvector(count, blocklen, stride, subtype->mpi, &(type.mpi));
 					types->push_back(type);
 				}

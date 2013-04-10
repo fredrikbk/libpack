@@ -113,7 +113,7 @@ void interposer_hvector(int count, int blocklength, MPI_Aint stride, MPI_Datatyp
 
     Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    Datatype* ddt = new HVectorDatatype(oldtype_farc, count, blocklength, stride);
+    Datatype* ddt = new HVectorDatatype(count, blocklength, stride, oldtype_farc);
     datatype_store(*newtype, ddt);
 }
 
@@ -123,7 +123,7 @@ void interposer_vector(int count, int blocklength, int stride, MPI_Datatype oldt
 
     Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    Datatype* ddt = new VectorDatatype(oldtype_farc, count, blocklength, stride);
+    Datatype* ddt = new VectorDatatype(count, blocklength, stride, oldtype_farc);
     datatype_store(*newtype, ddt);
 }
 
@@ -158,7 +158,7 @@ void interposer_create_hvector(int count, int blocklength, MPI_Aint stride, MPI_
 
     Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    Datatype* ddt = new HVectorDatatype(oldtype_farc, count, blocklength, stride);
+    Datatype* ddt = new HVectorDatatype(count, blocklength, stride, oldtype_farc);
     datatype_store(*newtype, ddt);
 }
 
@@ -199,7 +199,7 @@ void interposer_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtyp
 
     Datatype* oldtype_farc;
     oldtype_farc = datatype_retrieve(oldtype);
-    Datatype* ddt = new ContiguousDatatype(oldtype_farc, count);
+    Datatype* ddt = new ContiguousDatatype(count, oldtype_farc);
     datatype_store(*newtype, ddt);
 }
 

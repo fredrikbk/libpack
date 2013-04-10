@@ -56,7 +56,7 @@ static int sanity_check(int print) {
 	sleep(2);
 	HRT_GET_TIMESTAMP(t2);
 	HRT_GET_ELAPSED_TICKS(t1, t2, &s2);
-	if(print) printf("# sleep(2)/2 needed %llu ticks.\n", (s2/2));
+	if(print) printf("# sleep(2)/2 needed %lu ticks.\n", (s2/2));
 	if (fabs((double)s - (double)s2/2) > (s*0.05)) {
 		sanity = 0;
 		printf("# The high performance timer gives bogus results on this system!\n");
@@ -66,7 +66,7 @@ static int sanity_check(int print) {
 	sleep(3);
 	HRT_GET_TIMESTAMP(t2);
 	HRT_GET_ELAPSED_TICKS(t1, t2, &s3);
-	if(print) printf("# sleep(3)/3 needed %llu ticks.\n", s3/3);
+	if(print) printf("# sleep(3)/3 needed %lu ticks.\n", s3/3);
 	if (fabs((double)s - (double)s3/3) > (s*0.05)) {
 		sanity = 0;
 		printf("# The high performance timer gives bogus results on this system!\n");

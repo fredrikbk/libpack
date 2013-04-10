@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
 
     farc::DDT_Init();
     farc::Datatype* t1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
-    farc::Datatype* t2 = new farc::ContiguousDatatype(t1, 0);
+    farc::Datatype* t2 = new farc::ContiguousDatatype(0, t1);
     farc::DDT_Commit(t2);
     farc::DDT_Pack(farc_inbuf, farc_outbuf, t2, 2);
 

@@ -28,10 +28,12 @@ public:
     virtual void print();
 
     virtual void compile(CompilationType type);
-    virtual void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
-    virtual void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     void (*pack)(void*, int, void*);
     void (*unpack)(void*, int, void*);
+
+    virtual void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
+    virtual void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
+    virtual Datatype *compress() = 0;
 
     llvm::Function* fpack;
     llvm::Function* funpack;
@@ -40,7 +42,7 @@ public:
 /* Class for primitive types, such as MPI_INT, MPI_BYTE, etc */
 class PrimitiveDatatype : public Datatype {
 public:
-    enum PrimitiveType { BYTE, CHAR, DOUBLE, FLOAT, INT };   
+    enum PrimitiveType { BYTE, CHAR, DOUBLE, FLOAT, INT };
 
     PrimitiveDatatype(PrimitiveType type);
     virtual ~PrimitiveDatatype(void) {};
@@ -52,6 +54,7 @@ public:
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    Datatype *compress();
 
 private:
     PrimitiveDatatype::PrimitiveType type;
@@ -62,7 +65,7 @@ private:
 /* Class for contiguous types */
 class ContiguousDatatype : public Datatype {
 public:
-    ContiguousDatatype(Datatype* type, int count);
+    ContiguousDatatype(int count, Datatype* basetype);
     virtual ~ContiguousDatatype(void);
     ContiguousDatatype* clone();
 
@@ -72,6 +75,7 @@ public:
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    Datatype *compress();
 
 private:
     int count;
@@ -81,8 +85,8 @@ private:
 /* Class for vector types */
 class VectorDatatype : public Datatype {
 public:
-    VectorDatatype(Datatype* type, int count, int blocklen, int stride); 
-    virtual ~VectorDatatype(void); 
+    VectorDatatype(int count, int blocklen, int stride, Datatype* basetype);
+    virtual ~VectorDatatype(void);
     VectorDatatype* clone();
 
     int getExtent();
@@ -91,6 +95,7 @@ public:
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    Datatype *compress();
 
 private:
     int count;
@@ -102,7 +107,7 @@ private:
 /* Class for hvector types */
 class HVectorDatatype : public Datatype {
 public:
-    HVectorDatatype(Datatype* type, int count, int blocklen, int stride);
+    HVectorDatatype(int count, int blocklen, int stride, Datatype* basetype);
     virtual ~HVectorDatatype(void);
     HVectorDatatype* clone();
 
@@ -112,6 +117,7 @@ public:
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    Datatype *compress();
 
 private:
     int count;
@@ -133,6 +139,7 @@ public:
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    Datatype *compress();
 
 private:
     int count;
@@ -154,6 +161,7 @@ public:
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    Datatype *compress();
 
 private:
     int count;
@@ -165,7 +173,7 @@ private:
 /* Class for struct types */
 class StructDatatype : public Datatype {
 public:
-    StructDatatype(int count, int* blocklen, long*  displ, Datatype** types);
+    StructDatatype(int count, int* blocklen, long*  displ, Datatype** basetypes);
     virtual ~StructDatatype(void);
     StructDatatype* clone();
 
@@ -175,6 +183,7 @@ public:
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    Datatype *compress();
 
 private:
     int count;
