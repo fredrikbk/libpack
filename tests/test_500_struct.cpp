@@ -17,14 +17,13 @@ int main(int argc, char** argv) {
         char bar[8];
     };
 
-    struct Partstruct* particle;
-    particle = (struct Partstruct*) mpi_inbuf;
-
     MPI_Init(&argc, &argv);
-
 
     test_start("pack(2, struct[{1*MPI_INT, 6*MPI_INT, 8*MPI_CHAR}])");
     init_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+
+    struct Partstruct* particle;
+    particle = (struct Partstruct*) mpi_inbuf;
 
     MPI_Datatype mpitype; 
     MPI_Datatype type[3] = {MPI_INT, MPI_INT, MPI_CHAR};

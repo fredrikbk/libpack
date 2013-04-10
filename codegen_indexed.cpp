@@ -45,8 +45,8 @@ void codegenIndexedBlock(Value *compactbuf, Value *scatteredbuf, Value* incount,
         Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
         Value* scattered = Builder.CreateIntToPtr(scattered_disp, LLVM_INT8PTR);
 
-        if (pack) basetype->Codegen_Pack(scattered, constNode(blocklen), nextcompact);
-        else      basetype->Codegen_Unpack(nextcompact, constNode(blocklen), scattered);
+        if (pack) basetype->packCodegen(scattered, constNode(blocklen), nextcompact);
+        else      basetype->unpackCodegen(nextcompact, constNode(blocklen), scattered);
 
         // Increment the compact ptr by Size(Basetype) * Blocklen
         compact_addr = Builder.CreateAdd(compact_addr, compact_bytes_to_stride);
@@ -106,8 +106,8 @@ void codegenHindexed(Value *compactbuf, Value *scatteredbuf, Value* incount,
         Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
         Value* scattered = Builder.CreateIntToPtr(scattered_disp, LLVM_INT8PTR);
 
-        if (pack) basetype->Codegen_Pack(scattered, constNode(blocklens[i]), nextcompact);
-        else      basetype->Codegen_Unpack(nextcompact, constNode(blocklens[i]), scattered);
+        if (pack) basetype->packCodegen(scattered, constNode(blocklens[i]), nextcompact);
+        else      basetype->unpackCodegen(nextcompact, constNode(blocklens[i]), scattered);
 
         // Increment the compact ptr by Size(Basetype) * Blocklen
         Value* compact_bytes_to_stride = constNode((long)basetype->getSize() * blocklens[i]);
@@ -169,8 +169,8 @@ void codegenStruct(Value *compactbuf, Value *scatteredbuf,
         Value* scattered_disp = Builder.CreateAdd(scattered_disp_base, displ_i);
         Value* scattered = Builder.CreateIntToPtr(scattered_disp, LLVM_INT8PTR);
 
-        if (pack) basetypes[i]->Codegen_Pack(scattered, constNode(blocklens[i]), nextcompact);
-        else      basetypes[i]->Codegen_Unpack(nextcompact, constNode(blocklens[i]), scattered);
+        if (pack) basetypes[i]->packCodegen(scattered, constNode(blocklens[i]), nextcompact);
+        else      basetypes[i]->unpackCodegen(nextcompact, constNode(blocklens[i]), scattered);
 
         // Increment the compact ptr by Size(Basetype) * Blocklen
         Value* compact_bytes_to_stride =

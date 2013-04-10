@@ -16,6 +16,24 @@
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 
+
+#define LAZY           0
+#define LLVM_OPTIMIZE  0 
+
+#define DDT_OUTPUT     0 
+
+// LLVM_OUTPUT should be picked up from the environment by the build system
+#ifndef LLVM_OUTPUT
+#define LLVM_OUTPUT 0
+#endif
+
+// If LLVM_OUTPUT is set then we always want lazy
+#if LLVM_OUTPUT
+#undef LAZY
+#define LAZY 1
+#endif
+
+
 #define LLVM_VERIFY LLVM_OUTPUT
 #if LLVM_VERIFY
 #include "llvm/Analysis/Verifier.h"
@@ -44,6 +62,103 @@ FunctionType *FT;
 
 
 /* Datatype */
+Datatype::~Datatype() {
+    if (this->pack != NULL) {
+        TheExecutionEngine->freeMachineCodeForFunction(this->FPack);
+        this->FPack->eraseFromParent();
+        this->pack = NULL;
+    }
+    if (this->unpack != NULL) {
+        TheExecutionEngine->freeMachineCodeForFunction(this->FUnpack);
+        this->FUnpack->eraseFromParent();
+        this->unpack = NULL;
+    }
+}
+
+
+static inline Function* createFunctionHeader(const char *name) {
+    Function* F = Function::Create(FT, Function::ExternalLinkage, "pack", TheModule);
+    F->setDoesNotThrow();
+    F->setDoesNotAlias(1);
+    F->setDoesNotAlias(3);
+
+    // Set names for all arguments.
+    unsigned Idx = 0;
+    for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size(); ++AI, ++Idx) {
+        assert(AI !=  F->arg_end());
+        AI->setName(Args[Idx]);
+        NamedValues[Args[Idx]] = AI;
+    }
+
+    return F;
+}
+
+static inline void postProcessFunction(Function *F) {
+#if LLVM_VERIFY
+    //F->viewCFG();
+    verifyFunction(*F);
+#endif
+#if LLVM_OPTIMIZE
+    TheFPM->run(*F);
+#endif
+#if LLVM_OUTPUT
+    F->dump();
+
+    std::vector<Type *> arg_type;
+    arg_type.push_back(LLVM_INT8PTR);
+    arg_type.push_back(LLVM_INT8PTR);
+    arg_type.push_back(LLVM_INT64);
+    Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
+    memcopy->dump();
+
+    // std::vector<Type *> prefetch_arg_type;
+    // Function *prefetch = Intrinsic::getDeclaration(TheModule,Intrinsic::prefetch, prefetch_arg_type);
+    // prefetch->dump();
+#endif
+}
+
+void Datatype::compile(CompilationType type) {
+    Datatype *ddt = this;
+
+    bool pack   = (type == PACK_UNPACK || type == PACK)   ? true : false;
+    bool unpack = (type == PACK_UNPACK || type == UNPACK) ? true : false;
+    if (pack) {
+        Function *F = createFunctionHeader("pack");
+
+        // Create a new basic block to start insertion into.
+        BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", F);
+        Builder.SetInsertPoint(BB);
+
+        // generate code for the datatype
+        ddt->packCodegen(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
+        Builder.CreateRetVoid();
+
+        postProcessFunction(F);
+
+        ddt->pack = (void (*)(void*,int,void*))(intptr_t)
+            TheExecutionEngine->getPointerToFunction(F);
+        ddt->FPack = F;
+    }
+
+    if (unpack) {
+        Function *F = createFunctionHeader("unpack");
+
+        // Create a new basic block to start insertion into.
+        BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", F);
+        Builder.SetInsertPoint(BB);
+
+        // generate code for the datatype
+        ddt->unpackCodegen(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
+        Builder.CreateRetVoid();
+
+        postProcessFunction(F);
+
+        ddt->unpack = (void (*)(void*,int,void*))(intptr_t)
+            TheExecutionEngine->getPointerToFunction(F);
+        ddt->FUnpack = F;
+    }
+}
+
 void Datatype::print() {
     printf("%s\n", this->toString().c_str());
 }
@@ -63,17 +178,17 @@ PrimitiveDatatype::PrimitiveDatatype(PrimitiveDatatype::PrimitiveType type) : Da
     this->Size = this->Extent;
 }
 
-PrimitiveDatatype* PrimitiveDatatype::Clone() {
+PrimitiveDatatype* PrimitiveDatatype::clone() {
     PrimitiveDatatype* t_new = new PrimitiveDatatype(this->Type);
     return t_new;
 }
 
-void PrimitiveDatatype::Codegen_Pack(Value* inbuf, Value* incount,
+void PrimitiveDatatype::packCodegen(Value* inbuf, Value* incount,
                                      Value* outbuf) {
     codegenPrimitive(inbuf, incount, outbuf, this->Size, this->Type);
 }
 
-void PrimitiveDatatype::Codegen_Unpack(Value* inbuf, Value* incount,
+void PrimitiveDatatype::unpackCodegen(Value* inbuf, Value* incount,
                                        Value* outbuf) {
     codegenPrimitive(inbuf, incount, outbuf, this->Size, this->Type);
 }
@@ -114,26 +229,26 @@ string PrimitiveDatatype::toString() {
 
 /* Class ContiguousDatatype */
 ContiguousDatatype::ContiguousDatatype(Datatype* type, int count) {
-    this->Basetype = type->Clone();
+    this->Basetype = type->clone();
     this->Count = count;
 }
 
 ContiguousDatatype::~ContiguousDatatype(void) {
-    delete(this->Basetype);
+    delete this->Basetype;
 }
 
-ContiguousDatatype* ContiguousDatatype::Clone() {
+ContiguousDatatype* ContiguousDatatype::clone() {
     ContiguousDatatype* t_new = new ContiguousDatatype(this->Basetype, this->Count);
     return t_new;
 }
 
-void ContiguousDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void ContiguousDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenContiguous(inbuf, incount, outbuf, this->Basetype, 
                       this->Basetype->getExtent(), this->Basetype->getSize(), 
                       this->Count, true);
 }
 
-void ContiguousDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void ContiguousDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenContiguous(inbuf, incount, outbuf, this->Basetype, 
                       this->Basetype->getSize(), this->Basetype->getExtent(), 
                       this->Count, false);
@@ -157,7 +272,7 @@ string ContiguousDatatype::toString() {
 /* Class VectorDatatype */
 VectorDatatype::VectorDatatype(Datatype* type, int count, int blocklen, int stride) {
 
-    this->Basetype = type->Clone();
+    this->Basetype = type->clone();
     this->Count = count;
     this->Blocklen = blocklen;
     this->Stride = stride;
@@ -165,27 +280,23 @@ VectorDatatype::VectorDatatype(Datatype* type, int count, int blocklen, int stri
 }
 
 VectorDatatype::~VectorDatatype(void) {
-
-    delete(this->Basetype);
-
+    delete this->Basetype;
 }
 
-VectorDatatype* VectorDatatype::Clone() {
-
+VectorDatatype* VectorDatatype::clone() {
     VectorDatatype* t_new = new VectorDatatype(this->Basetype, this->Count, 
                                                this->Blocklen, this->Stride);
 
     return t_new;
-
 }
 
-void VectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void VectorDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenVector(inbuf, incount, outbuf, this->Basetype, this->Count,
                   this->Blocklen, this->Basetype->getExtent() * this->Stride,
                   this->Basetype->getSize() * this->Blocklen, true);
 }
 
-void VectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void VectorDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenVector(inbuf, incount, outbuf, this->Basetype, this->Count,
                   this->Blocklen, this->Basetype->getSize() * this->Blocklen,
                   this->Basetype->getExtent() * this->Stride, false);
@@ -211,33 +322,28 @@ string VectorDatatype::toString() {
 /* Class HVectorDatatype */
 HVectorDatatype::HVectorDatatype(Datatype* type, int count, int blocklen, int stride) {
 
-    this->Basetype = type->Clone();
+    this->Basetype = type->clone();
     this->Count = count;
     this->Blocklen = blocklen;
     this->Stride = stride;
 
 } 
 
-HVectorDatatype* HVectorDatatype::Clone() {
-
+HVectorDatatype* HVectorDatatype::clone() {
     HVectorDatatype* t_new = new HVectorDatatype(this->Basetype, this->Count, this->Blocklen, this->Stride);
-
     return t_new;
-
 }
 
 HVectorDatatype::~HVectorDatatype(void) {
-
-    delete(this->Basetype);
-
+    delete this->Basetype;
 }
 
-void HVectorDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void HVectorDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenVector(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Stride, this->Basetype->getSize() * this->Blocklen, true);
 }
 
-void HVectorDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void HVectorDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenVector(inbuf, incount, outbuf, this->Basetype, this->Count, this->Blocklen,
             this->Basetype->getSize() * this->Blocklen, this->Stride, false);
 }
@@ -261,26 +367,26 @@ string HVectorDatatype::toString() {
 /* Class IndexedBlockDatatype */
 IndexedBlockDatatype::IndexedBlockDatatype(int count, int blocklen, int* displ, Datatype* basetype) : Datatype() {
     this->Count = count;
-    this->Basetype = basetype->Clone();
+    this->Basetype = basetype->clone();
     this->Blocklen = blocklen;
     for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
 }
 
 IndexedBlockDatatype::~IndexedBlockDatatype(void) {
-    delete(this->Basetype);
+    delete this->Basetype;
 }
 
-IndexedBlockDatatype* IndexedBlockDatatype::Clone() {
+IndexedBlockDatatype* IndexedBlockDatatype::clone() {
     IndexedBlockDatatype* t_new = new IndexedBlockDatatype(this->Count, this->Blocklen, &(this->Displ[0]), this->Basetype);
     return t_new;
 }
 
-void IndexedBlockDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void IndexedBlockDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenIndexedBlock(outbuf, inbuf, incount, this->getExtent(), this->Count,
                         this->Blocklen, this->Basetype, this->Displ, true);
 }
 
-void IndexedBlockDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void IndexedBlockDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenIndexedBlock(inbuf, outbuf, incount, this->getExtent(), this->Count,
                         this->Blocklen, this->Basetype, this->Displ, false);
 }
@@ -335,32 +441,27 @@ string IndexedBlockDatatype::toString() {
 HIndexedDatatype::HIndexedDatatype(int count, int* blocklen, long* displ, Datatype* basetype) : Datatype() {
 
     this->Count = count;
-    this->Basetype = basetype->Clone();
+    this->Basetype = basetype->clone();
     for (int i=0; i<count; i++) this->Blocklen.push_back(blocklen[i]);
     for (int i=0; i<count; i++) this->Displ.push_back(displ[i]);
 
 }
 
 HIndexedDatatype::~HIndexedDatatype(void) {
-
-    delete(this->Basetype);
-
+    delete this->Basetype;
 }
 
-HIndexedDatatype* HIndexedDatatype::Clone() {
-
+HIndexedDatatype* HIndexedDatatype::clone() {
     HIndexedDatatype* t_new = new HIndexedDatatype(this->Count, &(this->Blocklen[0]), &(this->Displ[0]), this->Basetype);
-
     return t_new;
-
 }
 
-void HIndexedDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void HIndexedDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenHindexed(outbuf, inbuf, incount, this->getExtent(), this->Count,
                     this->Basetype, this->Blocklen, this->Displ, true);
 }
 
-void HIndexedDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void HIndexedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenHindexed(inbuf, outbuf, incount, this->getExtent(), this->Count,
                     this->Basetype, this->Blocklen, this->Displ, false);
 }
@@ -412,25 +513,24 @@ StructDatatype::StructDatatype(int count, int* blocklen, long*  displ,
     this->Count = count;
     for (int i=0; i<count; i++) Blocklen.push_back(blocklen[i]);
     for (int i=0; i<count; i++) Displ.push_back(displ[i]);
-    for (int i=0; i<count; i++) Types.push_back(types[i]->Clone());
+    for (int i=0; i<count; i++) Types.push_back(types[i]->clone());
 }
 
 StructDatatype::~StructDatatype(void) {
-    for (int i=0; i<this->Count; i++) delete(Types[i]);
+    for (int i=0; i<this->Count; i++) delete Types[i];
 }
 
-StructDatatype* StructDatatype::Clone() {
+StructDatatype* StructDatatype::clone() {
     StructDatatype* t_new = new StructDatatype(this->Count, &(this->Blocklen[0]), &(this->Displ[0]), &(this->Types[0]));
-
     return t_new;
 }
 
-void StructDatatype::Codegen_Pack(Value* inbuf, Value* incount, Value* outbuf) {
+void StructDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenStruct(outbuf, inbuf, incount, this->getExtent(), this->Count,
                   this->Blocklen, this->Displ, this->Types, true);
 }
 
-void StructDatatype::Codegen_Unpack(Value* inbuf, Value* incount, Value* outbuf) {
+void StructDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenStruct(inbuf, outbuf, incount, this->getExtent(), this->Count,
                   this->Blocklen, this->Displ, this->Types, false);
 }
@@ -472,124 +572,26 @@ string StructDatatype::toString() {
     return res.str();
 }
 
-
-// this jits the pack/unpack functions
-void generate_pack_function(Datatype* ddt) {
-    Function* F = Function::Create(FT, Function::ExternalLinkage, "packer", TheModule);
-    F->setDoesNotThrow();
-    F->setDoesNotAlias(1);
-    F->setDoesNotAlias(3);
-
-    // Set names for all arguments.
-    unsigned Idx = 0;
-    for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size(); ++AI, ++Idx) {
-        assert(AI !=  F->arg_end());
-        AI->setName(Args[Idx]);
-        NamedValues[Args[Idx]] = AI;
-    }
-
-    // Create a new basic block to start insertion into.
-    BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", F);
-    Builder.SetInsertPoint(BB);
-
-    // generate code for the datatype
-    ddt->Codegen_Pack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
-    Builder.CreateRetVoid();
-
-#if LLVM_VERIFY
-    //F->viewCFG();
-    verifyFunction(*F);
-#endif
-#if LLVM_OPTIMIZE
-    TheFPM->run(*F);
-#endif
-#if LLVM_OUTPUT
-    F->dump();
-
-    std::vector<Type *> arg_type;
-    arg_type.push_back(LLVM_INT8PTR);
-    arg_type.push_back(LLVM_INT8PTR);
-    arg_type.push_back(LLVM_INT64);
-    Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
-    memcopy->dump();
-
-//    std::vector<Type *> prefetch_arg_type;
-//    Function *prefetch = Intrinsic::getDeclaration(TheModule, Intrinsic::prefetch, prefetch_arg_type);
-//    prefetch->dump();
-#endif
-
-    ddt->packer = (void (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
-    ddt->FPack = F;
-
-}
-
-void generate_unpack_function(Datatype* ddt) {
-    Function* F = Function::Create(FT, Function::ExternalLinkage, "unpacker", TheModule);
-    F->setDoesNotThrow();
-    F->setDoesNotAlias(1);
-    F->setDoesNotAlias(3);
-
-    // Set names for all arguments.
-    unsigned Idx = 0;
-    for (Function::arg_iterator AI = F->arg_begin(); Idx != Args.size(); ++AI, ++Idx) {
-        AI->setName(Args[Idx]);
-        NamedValues[Args[Idx]] = AI;
-    }
-
-    // Create a new basic block to start insertion into.
-    BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", F);
-    Builder.SetInsertPoint(BB);
-
-    // generate code for the datatype
-    ddt->Codegen_Unpack(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
-    Builder.CreateRetVoid();
-
-#if LLVM_VERIFY
-    verifyFunction(*F);
-#endif
-#if LLVM_OPTIMIZE
-    TheFPM->run(*F);
-#endif
-#if LLVM_OUTPUT
-    F->dump();
-
-    std::vector<Type *> arg_type;
-    arg_type.push_back(LLVM_INT8PTR);
-    arg_type.push_back(LLVM_INT8PTR);
-    arg_type.push_back(LLVM_INT64);
-    Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
-    memcopy->dump();
-
-//    std::vector<Type *> prefetch_arg_type;
-//    Function *prefetch = Intrinsic::getDeclaration(TheModule, Intrinsic::prefetch, prefetch_arg_type);
-//    prefetch->dump();
-#endif
-
-    ddt->unpacker = (void (*)(void*, int, void*))(intptr_t) TheExecutionEngine->getPointerToFunction(F);
-    ddt->FUnpack = F;
-}
-
 void DDT_Commit(Datatype* ddt) {
 #if DDT_OUTPUT
     ddt->print();
 #endif
 #if !LAZY
-    generate_pack_function(ddt);
-    generate_unpack_function(ddt);
+    ddt->compile(Datatype::PACK_UNPACK);
 #endif
 }
 
 // this calls the pack/unpack function
 void DDT_Pack(void* inbuf, void* outbuf, Datatype* ddt, int count) {
 #if LAZY
-    if (ddt->packer == NULL) generate_pack_function(ddt);
+    if (ddt->pack == NULL) ddt->compile(Datatype::PACK);
 #endif
-    ddt->packer(inbuf, count, outbuf);
+    ddt->pack(inbuf, count, outbuf);
 }
 
 void DDT_Lazy_Unpack_Commit(Datatype* ddt) {
 #if LAZY
-    if (ddt->unpacker == NULL) generate_unpack_function(ddt);
+    if (ddt->unpack == NULL) ddt->compile(Datatype::UNPACK);
 #endif
 }
 
@@ -597,19 +599,10 @@ void DDT_Unpack(void* inbuf, void* outbuf, Datatype* ddt, int count) {
 #if LAZY
     DDT_Lazy_Unpack_Commit(ddt);
 #endif
-    ddt->unpacker(inbuf, count, outbuf);
+    ddt->unpack(inbuf, count, outbuf);
 }
 
 void DDT_Free(Datatype* ddt) {
-
-    if (ddt->packer != NULL) {
-        TheExecutionEngine->freeMachineCodeForFunction(ddt->FPack);
-        ddt->FPack->eraseFromParent();
-    }
-    if (ddt->unpacker != NULL) {
-        TheExecutionEngine->freeMachineCodeForFunction(ddt->FUnpack);
-        ddt->FUnpack->eraseFromParent();
-    }
     delete ddt;
 }
 

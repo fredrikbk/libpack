@@ -31,8 +31,8 @@ void codegenContiguous(Value* inbuf, Value* incount,
 
 
     // Basetype Code Generation
-    if (pack) basetype->Codegen_Pack(in, constNode(count), out);
-    else      basetype->Codegen_Unpack(in, constNode(count), out);
+    if (pack) basetype->packCodegen(in, constNode(count), out);
+    else      basetype->unpackCodegen(in, constNode(count), out);
 
 
     // Increment the out ptr by Size(Basetype) * Blocklen

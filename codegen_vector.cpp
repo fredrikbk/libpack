@@ -78,8 +78,8 @@ void codegenVector(Value* inbuf, Value* incount, Value* outbuf,
     
 
     // Basetype Code Generation
-    if (pack) basetype->Codegen_Pack(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
-    else      basetype->Codegen_Unpack(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
+    if (pack) basetype->packCodegen(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
+    else      basetype->unpackCodegen(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
 
 
     // Increment out2 and in2
