@@ -390,8 +390,11 @@ void produce_report() {
         MPI_Aint extent_mpi;
         MPI_Type_extent(datatype.mpi, &extent_mpi);
         if (extent != extent_mpi) {
-            printf("EXTENT MISSMATCH: MPI extent: %i FARC extent: %i\n", extent_mpi, extent);
-		    cout << setw(name_w)        << datatype.farc->toString().c_str() << std::endl;
+            cerr << "EXTENT MISSMATCH: MPI extent: " << extent_mpi
+                 << " FARC extent: " << extent
+                 << setw(name_w)
+                 << datatype.farc->toString().c_str()
+                 << endl;
             exit(EXIT_FAILURE);
         }
        
