@@ -11,7 +11,7 @@ namespace farc {
 IRBuilder<> Builder(getGlobalContext());
 
 Value* multNode(int op1, Value* op2PtrNode) {
-    Value* op1Node = ConstantInt::get(getGlobalContext(), APInt(64, op1, false));
+    Value* op1Node = constNode((long)op1);
     Value* op2Node = Builder.CreateIntCast(op2PtrNode, LLVM_INT64, false); 
     return Builder.CreateMul(op1Node, op2Node);
 }

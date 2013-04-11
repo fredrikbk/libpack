@@ -137,9 +137,9 @@ void Datatype::compile(CompilationType type) {
 
         postProcessFunction(F);
 
-        ddt->pack = (void (*)(void*,int,void*))(intptr_t)
+        this->pack = (void (*)(void*,int,void*))(intptr_t)
             TheExecutionEngine->getPointerToFunction(F);
-        ddt->fpack = F;
+        this->fpack = F;
     }
 
     if (unpack) {
@@ -155,10 +155,12 @@ void Datatype::compile(CompilationType type) {
 
         postProcessFunction(F);
 
-        ddt->unpack = (void (*)(void*,int,void*))(intptr_t)
+        this->unpack = (void (*)(void*,int,void*))(intptr_t)
             TheExecutionEngine->getPointerToFunction(F);
-        ddt->funpack = F;
+        this->funpack = F;
     }
+
+    delete ddt;
 }
 
 void Datatype::print() {
@@ -196,7 +198,7 @@ void PrimitiveDatatype::unpackCodegen(Value* inbuf, Value* incount,
 }
 
 Datatype *PrimitiveDatatype::compress() {
-    return this;
+    return this->clone();
 }
 
 int PrimitiveDatatype::getExtent() {
@@ -261,10 +263,12 @@ void ContiguousDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outb
 }
 
 Datatype *ContiguousDatatype::compress() {
-    // Datatype *cbasetype = basetype->compress();
-    // ContiguousDatatype *datatype = new ContiguousDatatype(this->count, cbasetype);
-    // return datatype;
-    return this;
+    Datatype *cbasetype = this->basetype->compress();
+    Datatype *datatype;
+
+    datatype = new ContiguousDatatype(this->count, cbasetype);
+
+    return datatype;
 }
 
 int ContiguousDatatype::getExtent() {
@@ -314,11 +318,13 @@ void VectorDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) 
 }
 
 Datatype *VectorDatatype::compress() {
-    // Datatype *cbasetype = basetype->compress();
-    // VectorDatatype *datatype = new VectorDatatype(this->count, this->blocklen,
-                                                  // this->stride, cbasetype);
-    // return datatype;
-    return this;
+    Datatype *cbasetype = this->basetype->compress();
+    Datatype *datatype;
+
+    datatype = new VectorDatatype(this->count, this->blocklen, this->stride,
+                                  cbasetype);
+
+    return datatype;
 }
 
 int VectorDatatype::getExtent() {
@@ -366,7 +372,13 @@ void HVectorDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf)
 }
 
 Datatype *HVectorDatatype::compress() {
-    return this;
+    Datatype *cbasetype = this->basetype->compress();
+    Datatype *datatype;
+
+    datatype = new HVectorDatatype(this->count, this->blocklen, this->stride,
+                                   cbasetype);
+
+    return datatype;
 }
 
 int HVectorDatatype::getExtent() {
@@ -413,7 +425,13 @@ void IndexedBlockDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* ou
 }
 
 Datatype *IndexedBlockDatatype::compress() {
-    return this;
+    Datatype *cbasetype = this->basetype->compress();
+    Datatype *datatype;
+
+    datatype = new IndexedBlockDatatype(this->count, this->blocklen,
+                                        &(this->displs[0]), cbasetype);
+
+    return datatype;
 }
 
 int IndexedBlockDatatype::getExtent() {
@@ -486,7 +504,13 @@ void HIndexedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf
 }
 
 Datatype *HIndexedDatatype::compress() {
-    return this;
+    Datatype *cbasetype = this->basetype->compress();
+    Datatype *datatype;
+
+    datatype = new HIndexedDatatype(this->count, &(this->blocklens[0]),
+                                    &(this->displs[0]), cbasetype);
+
+    return datatype;
 }
 
 int HIndexedDatatype::getExtent() {
@@ -559,7 +583,16 @@ void StructDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) 
 }
 
 Datatype *StructDatatype::compress() {
-    return this;
+    std::vector<Datatype*> cbasetypes(this->basetypes.size());
+    for (unsigned int i=0 ; i<this->basetypes.size(); i++) {
+        cbasetypes[i] = this->basetypes[i]->compress();
+    }
+    Datatype *datatype;
+
+    datatype = new StructDatatype(this->count, &(this->blocklens[0]),
+                                  &(this->displs[0]), &(this->basetypes[0]));
+
+    return datatype;
 }
 
 int StructDatatype::getExtent() {
