@@ -1916,8 +1916,8 @@ void init_buffer(size_t size, void* buf, bool pattern) {
 int compare_buffers(size_t size, void *mpi, void *farc) {
 	int ret = 0;
     for (size_t i=0; i<size; i++) {
-        if (((char*)farc)[i] != ((char*)farc)[i]) {
-			printf("%3lu: mpi(%3i) != farc(%3i)\n", i, ((char*)mpi)[i], ((char*)farc)[i]);
+        if (((char*)farc)[i] != ((char*)mpi)[i]) {
+			/* printf("%3lu: mpi(%3i) != farc(%3i)\n", i, ((char*)mpi)[i], ((char*)farc)[i]); */
 			ret = -1;
 		}
     }   
@@ -1997,10 +1997,11 @@ void produce_report() {
 		    cout << setw(name_w)        << datatype.farc->toString().c_str() << std::endl;
             exit(EXIT_FAILURE);
         }
+
 		int extent = datatype.farc->getExtent();
         MPI_Aint extent_mpi;
         MPI_Type_extent(datatype.mpi, &extent_mpi);
-        if (extent != extent_mpi) {
+        if (datatype.farc->getExtent() != extent_mpi) {
             cerr << "EXTENT MISSMATCH: MPI extent: " << extent_mpi
                  << " FARC extent: " << extent
                  << setw(name_w)
@@ -2008,20 +2009,23 @@ void produce_report() {
                  << endl;
             exit(EXIT_FAILURE);
         }
+
+        // TODO Remove this. The *2 is used to provide "centered"
+        // buffer in case of negative strides.  It is a workaround
+        // until farc supports
+        extent = extent * 2;
        
-
-		void *mpi_bigbuf, *mpi_smallbuf, *mpi_bigbuf_centered;
+		void *mpi_bigbuf, *mpi_smallbuf;
 		alloc_buffer(size, &mpi_smallbuf, ALIGNMENT);
-        //TODO the *2 is used to provide "centered" buffer in case of negative strides
-		alloc_buffer(extent*2, &mpi_bigbuf, ALIGNMENT);
-        mpi_bigbuf_centered = ((char*) mpi_bigbuf) + extent;
+		alloc_buffer(extent, &mpi_bigbuf, ALIGNMENT);
 
-		void *farc_bigbuf, *farc_smallbuf, *farc_bigbuf_centered;
+		void *farc_bigbuf, *farc_smallbuf;
 		alloc_buffer(size, &farc_smallbuf, ALIGNMENT);
-        //TODO the *2 is used to provide "centered" buffer in case of negative strides
-		alloc_buffer(extent*2, &farc_bigbuf, ALIGNMENT);
-        farc_bigbuf_centered = ((char*) farc_bigbuf) + extent;
+		alloc_buffer(extent, &farc_bigbuf, ALIGNMENT);
 
+        // TODO Remove this.
+        void *mpi_bigbuf_centered  = ((char*) mpi_bigbuf)  + (extent / 2);
+        void *farc_bigbuf_centered = ((char*) farc_bigbuf) + (extent / 2);
 
 		// mpi_commit
 		TIME_HOT( MPI_Type_commit(&(datatype.mpi)), mpi_commit_time );
@@ -2030,33 +2034,32 @@ void produce_report() {
 		TIME_HOT( DDT_Commit(datatype.farc), farc_commit_time );
 
 		// mpi_pack
-        
-		init_buffer(extent*2, mpi_bigbuf, true);
+        init_buffer(extent, mpi_bigbuf, true);
 		init_buffer(size, mpi_smallbuf, false);
-		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf, 1, datatype.mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
+		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf_centered, 1, datatype.mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
 
 		// farc pack
-        //TODO the *2 is used to provide "centered" buffer in case of negative strides
-		init_buffer(extent*2, farc_bigbuf, true);
+
+		init_buffer(extent, farc_bigbuf, true);
 		init_buffer(size, farc_smallbuf, false);
 		TIME_HOT( DDT_Pack(farc_bigbuf_centered, farc_smallbuf, datatype.farc, 1), farc_pack_time);
 
 		// verify
-        //TODO the *2 is used to provide "centered" buffer in case of negative strides
-		if (compare_buffers(extent*2, mpi_bigbuf, farc_bigbuf) != 0) {
-			fprintf(stderr, "Error: %s: MPI and FARC input buffers differ after packing\n", 
-				datatype.farc->toString().c_str());
+		if (compare_buffers(extent, mpi_bigbuf, farc_bigbuf) != 0) {
+			cerr <<  "Error: " << datatype.farc->toString().c_str() 
+                 << ": MPI and FARC input buffers differ after packing" << endl; 
+				
 		}
 		if (compare_buffers(size, mpi_smallbuf, farc_smallbuf) != 0) {
-			fprintf(stderr, "Error: %s: MPI and FARC output buffers differ after packing\n", 
-				datatype.farc->toString().c_str());
+			cerr <<  "Error: " << datatype.farc->toString().c_str() 
+                 << ": MPI and FARC output buffers differ after packing" << endl; 
 		}
 
 
 		// mpi_unpack
 		init_buffer(size, mpi_smallbuf, true);
 		init_buffer(extent, mpi_bigbuf, false);
-		TIME_HOT( {int pos=0; MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf, 1, datatype.mpi, MPI_COMM_WORLD);}, mpi_unpack_time);
+		TIME_HOT( {int pos=0; MPI_Unpack(mpi_smallbuf, size, &pos, mpi_bigbuf_centered, 1, datatype.mpi, MPI_COMM_WORLD);}, mpi_unpack_time);
 
 		// farc unpack
 		init_buffer(size, farc_smallbuf, true);
@@ -2065,13 +2068,13 @@ void produce_report() {
 
 		// verify
 		if (compare_buffers(size, mpi_smallbuf, farc_smallbuf) != 0) {
-			fprintf(stderr, "Error: %s: MPI and FARC input buffers differ after unpacking\n", 
-				datatype.farc->toString().c_str());
+			cerr <<  "Error: " << datatype.farc->toString().c_str() 
+                 << ": MPI and FARC input buffers differ after unpacking" << endl; 
 		}
         //TODO the *2 is used to provide "centered" buffer in case of negative strides
-		if (compare_buffers(extent*2, mpi_bigbuf, farc_bigbuf) != 0) {
-			fprintf(stderr, "Error: %s: MPI and FARC output buffers differ after unpacking\n", 
-				datatype.farc->toString().c_str());
+		if (compare_buffers(extent, mpi_bigbuf, farc_bigbuf) != 0) {
+			cerr <<  "Error: " << datatype.farc->toString().c_str() 
+                 << ": MPI and FARC output buffers differ after unpacking" << endl; 
 		}
 
 		double pack_speedup   = ((mpi_pack_time/farc_pack_time)-1)*100;
