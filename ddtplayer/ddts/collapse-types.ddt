@@ -1,2 +1,6 @@
+ctg(256)[double]
+ctg(16)[ctg(16)[double]]
+
+ctg(1024)[double]
 vec(8 8 8)[ctg(16)[double]]
-vec(16 16 16)[ctg(16)[double]]
+hvec(8 8 1024)[ctg(16)[double]]

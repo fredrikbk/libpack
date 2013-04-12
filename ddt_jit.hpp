@@ -71,6 +71,8 @@ public:
 
     int getExtent();
     int getSize();
+    int getCount();
+    Datatype *getBasetype();
     std::string toString();
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
@@ -91,6 +93,10 @@ public:
 
     int getExtent();
     int getSize();
+    int getCount();
+    int getBlocklen();
+    int getStride();
+    Datatype *getBasetype();
     std::string toString();
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
@@ -113,6 +119,10 @@ public:
 
     int getExtent();
     int getSize();
+    int getCount();
+    int getBlocklen();
+    int getStride();
+    Datatype *getBasetype();
     std::string toString();
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);

@@ -23,6 +23,7 @@ void codegenPrimitive(Value* inbuf, Value* incount, Value* outbuf,
         Builder.CreateMemCpy(outbuf, inbuf, contig_extend, 1);
     }
     else {
+            
 #if PACKVAR == 1 // Unaligned loads and stores
         // Kernel that performs unaligned memcopies using vector
         // instructions.  The kernel copies as many elements as
@@ -50,12 +51,12 @@ void codegenPrimitive(Value* inbuf, Value* incount, Value* outbuf,
         // Tip: Make this 4*8 times larger than COPY_LOOP_UNROLL for
         // smooth double performance
         #ifndef COPY_LOOP_TRESHOLD
-        #define COPY_LOOP_TRESHOLD 32*8
+        #define COPY_LOOP_TRESHOLD 64*8
         #endif
 
         // Number of times to unroll the copy loop
         #ifndef COPY_LOOP_UNROLL
-        #define COPY_LOOP_UNROLL 8
+        #define COPY_LOOP_UNROLL 16
         #endif
 
         const int LOOP_ELEM_TRESHOLD = COPY_LOOP_TRESHOLD / size;

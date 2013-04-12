@@ -6,6 +6,7 @@
 
 #include <map>
 #include <cstdio>
+#include <iostream>
 #include <sstream>
 
 #include "llvm/IR/Module.h"
@@ -18,9 +19,11 @@
 
 
 #define LAZY           0
-#define LLVM_OPTIMIZE  0 
 
+#define DDT_OPTIMIZE   1
 #define DDT_OUTPUT     0 
+
+#define LLVM_OPTIMIZE  0
 
 // LLVM_OUTPUT should be picked up from the environment by the build system
 #ifndef LLVM_OUTPUT
@@ -120,7 +123,11 @@ static inline void postProcessFunction(Function *F) {
 void Datatype::compile(CompilationType type) {
     // Compress the datatype, by substituting datatypes for
     // equivalent, but more compact, datatypes
+    #if DDT_OPTIMIZE
     Datatype *ddt = this->compress();
+    #else
+    Datatype *ddt = this;
+    #endif
 
     bool pack   = (type == PACK_UNPACK || type == PACK)   ? true : false;
     bool unpack = (type == PACK_UNPACK || type == UNPACK) ? true : false;
@@ -160,7 +167,9 @@ void Datatype::compile(CompilationType type) {
         this->funpack = F;
     }
 
+    #if DDT_OPTIMIZE
     delete ddt;
+    #endif
 }
 
 void Datatype::print() {
@@ -183,8 +192,7 @@ PrimitiveDatatype::PrimitiveDatatype(PrimitiveDatatype::PrimitiveType type) : Da
 }
 
 PrimitiveDatatype* PrimitiveDatatype::clone() {
-    PrimitiveDatatype* t_new = new PrimitiveDatatype(this->type);
-    return t_new;
+    return new PrimitiveDatatype(this->type);
 }
 
 void PrimitiveDatatype::packCodegen(Value* inbuf, Value* incount,
@@ -198,7 +206,7 @@ void PrimitiveDatatype::unpackCodegen(Value* inbuf, Value* incount,
 }
 
 Datatype *PrimitiveDatatype::compress() {
-    return this->clone();
+    return new PrimitiveDatatype(this->type);
 }
 
 int PrimitiveDatatype::getExtent() {
@@ -246,8 +254,7 @@ ContiguousDatatype::~ContiguousDatatype(void) {
 }
 
 ContiguousDatatype* ContiguousDatatype::clone() {
-    ContiguousDatatype* t_new = new ContiguousDatatype(this->count, this->basetype);
-    return t_new;
+    return new ContiguousDatatype(this->count, this->basetype);
 }
 
 void ContiguousDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
@@ -266,7 +273,19 @@ Datatype *ContiguousDatatype::compress() {
     Datatype *cbasetype = this->basetype->compress();
     Datatype *datatype;
 
-    datatype = new ContiguousDatatype(this->count, cbasetype);
+    // Compress contiguous basetypes into count.  Only applies if
+    // basetype's extent is the same as its size.
+    ContiguousDatatype *ctg = dynamic_cast<ContiguousDatatype*>(cbasetype);
+    if (ctg != NULL && ctg->getExtent() == ctg->getSize()) {
+        datatype = new ContiguousDatatype(this->count * ctg->getCount(), ctg->getBasetype());
+        delete cbasetype;
+    }
+    else {
+        datatype = new ContiguousDatatype(this->count, cbasetype);
+    }
+
+    assert(datatype->getSize() == this->getSize());
+    assert(datatype->getExtent() == this->getExtent());
 
     return datatype;
 }
@@ -277,6 +296,14 @@ int ContiguousDatatype::getExtent() {
 
 int ContiguousDatatype::getSize() {
     return this->count * this->basetype->getSize();
+}
+
+int ContiguousDatatype::getCount() {
+    return this->count;
+}
+
+Datatype *ContiguousDatatype::getBasetype() {
+    return this->basetype;
 }
 
 string ContiguousDatatype::toString() {
@@ -299,10 +326,8 @@ VectorDatatype::~VectorDatatype(void) {
 }
 
 VectorDatatype* VectorDatatype::clone() {
-    VectorDatatype* t_new = new VectorDatatype(this->count, this->blocklen,
-                                               this->stride, this->basetype);
-
-    return t_new;
+    return new VectorDatatype(this->count, this->blocklen,
+                              this->stride, this->basetype);
 }
 
 void VectorDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
@@ -321,8 +346,33 @@ Datatype *VectorDatatype::compress() {
     Datatype *cbasetype = this->basetype->compress();
     Datatype *datatype;
 
-    datatype = new VectorDatatype(this->count, this->blocklen, this->stride,
-                                  cbasetype);
+    // Compress contiguous basetypes into blocklen.  Only applies if
+    // basetype's extent is the same as its size.
+    ContiguousDatatype *ctg = dynamic_cast<ContiguousDatatype*>(cbasetype);
+    if (ctg != NULL && ctg->getExtent() == ctg->getSize()) {
+        datatype = new VectorDatatype(this->count,
+                                      this->blocklen * ctg->getCount(),
+                                      this->stride * ctg->getCount(),
+                                      ctg->getBasetype());
+        delete cbasetype;
+    }
+    else {
+        datatype = new VectorDatatype(this->count,
+                                      this->blocklen,
+                                      this->stride,
+                                      cbasetype);
+    }
+
+    // Try to promote the vector to a contiguous type
+    VectorDatatype *vecdt = (VectorDatatype*)datatype;
+    if (vecdt->getStride() == vecdt->getBlocklen()) {
+        int contigCount = vecdt->getCount() * vecdt->getBlocklen();
+        datatype = new ContiguousDatatype(contigCount, vecdt->getBasetype());
+        delete vecdt;
+    }
+
+    assert(datatype->getSize() == this->getSize());
+    assert(datatype->getExtent() == this->getExtent());
 
     return datatype;
 }
@@ -334,6 +384,22 @@ int VectorDatatype::getExtent() {
 
 int VectorDatatype::getSize() {
     return this->count * this->blocklen*this->basetype->getSize();
+}
+
+int VectorDatatype::getCount() {
+    return count;
+}
+
+int VectorDatatype::getBlocklen() {
+    return blocklen;
+}
+
+int VectorDatatype::getStride() {
+    return stride;
+}
+
+Datatype *VectorDatatype::getBasetype() {
+    return this->basetype;
 }
 
 string VectorDatatype::toString() {
@@ -353,8 +419,7 @@ HVectorDatatype::HVectorDatatype(int count, int blocklen, int stride, Datatype* 
 } 
 
 HVectorDatatype* HVectorDatatype::clone() {
-    HVectorDatatype* t_new = new HVectorDatatype(this->count, this->blocklen, this->stride, this->basetype);
-    return t_new;
+    return new HVectorDatatype(this->count, this->blocklen, this->stride, this->basetype);
 }
 
 HVectorDatatype::~HVectorDatatype(void) {
@@ -375,8 +440,33 @@ Datatype *HVectorDatatype::compress() {
     Datatype *cbasetype = this->basetype->compress();
     Datatype *datatype;
 
-    datatype = new HVectorDatatype(this->count, this->blocklen, this->stride,
-                                   cbasetype);
+    // Compress contiguous basetypes into blocklen.  Only applies if
+    // basetype's extent is the same as its size.
+    ContiguousDatatype *ctg = dynamic_cast<ContiguousDatatype*>(cbasetype);
+    if (ctg != NULL && ctg->getExtent() == ctg->getSize()) {
+        datatype = new HVectorDatatype(this->count,
+                                       this->blocklen * ctg->getCount(),
+                                       this->stride,
+                                       ctg->getBasetype());
+        delete cbasetype;
+    }
+    else {
+        datatype = new HVectorDatatype(this->count,
+                                       this->blocklen,
+                                       this->stride,
+                                       cbasetype);
+    }
+
+    // Try to promote the vector to a contiguous type
+    HVectorDatatype *vecdt = (HVectorDatatype*)datatype;
+    if (vecdt->getStride() == (vecdt->getBlocklen() * vecdt->getBasetype()->getExtent())) {
+        int contigCount = vecdt->getCount() * vecdt->getBlocklen();
+        datatype = new ContiguousDatatype(contigCount, vecdt->getBasetype());
+        delete vecdt;
+    }
+
+    assert(datatype->getSize() == this->getSize());
+    assert(datatype->getExtent() == this->getExtent());
 
     return datatype;
 }
@@ -388,6 +478,22 @@ int HVectorDatatype::getExtent() {
 
 int HVectorDatatype::getSize() {
     return this->count * this->blocklen*this->basetype->getSize();
+}
+
+int HVectorDatatype::getCount() {
+    return count;
+}
+
+int HVectorDatatype::getBlocklen() {
+    return blocklen;
+}
+
+int HVectorDatatype::getStride() {
+    return stride;
+}
+
+Datatype *HVectorDatatype::getBasetype() {
+    return this->basetype;
 }
 
 string HVectorDatatype::toString() {
