@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$1" ]
+then
+    echo "ddtplay <filename>"
+    exit 1
+fi
+
+
+DIR="$( cd "$( dirname "$0" )" && pwd )"
+make -C ${DIR} > /dev/null
+
+${DIR}/ddtplayer $1
+
