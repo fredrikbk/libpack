@@ -1,5 +1,5 @@
 %{
-#include "parser.hpp"
+#include "parser.tab.hpp"
 #define YY_NO_UNPUT
 
 %}
