@@ -2,7 +2,7 @@ MPICXX=mpic++
 CXX=clang++
 LEX=flex
 
-.PHONY: all parser
+.PHONY: all
 
 FARCDIR=..
 
@@ -15,18 +15,18 @@ OBJECTS=lexer.o parser.o $(FARCDIR)/libfarc.a
 ddtplayer: $(OBJECTS)
 	$(MPICXX) -o $@ $^ $(LDFLAGS) $(LDLIBS) 
 
-all: parser ddtplayer
-
 $(FARCDIR)/libfarc.a: $(FARCDIR)/*.cpp $(FARCDIR)/*.hpp
 	make -C $(FARCDIR) libfarc.a
 
 %.o: %.cpp
 	$(CXX) -c -o $@ $< $(CPPFLAGS)
 
-parser: parser.y lexer.lex
-	bison -d -o parser.cpp parser.y
-	flex -o lexer.c lexer.lex
+parser.cpp parser.hpp: parser.y
+	bison -d -o parser.cpp $<
+
+lexer.c: lexer.flex parser.cpp
+	flex -o $@ $<
 
 clean:
-	rm -f ddtplayer *.o
+	rm -f ddtplayer *.o parser.hpp parser.cpp lexer.c
 
