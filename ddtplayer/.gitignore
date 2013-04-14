@@ -1,4 +1,4 @@
 ddtplayer
-lexer.c
-parser.hpp
-parser.cpp
+lex.yy.c
+parser.tab.hpp
+parser.tab.cpp

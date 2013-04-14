@@ -41,8 +41,19 @@ struct Indices {
 	vector<struct Index *> indices;
 };
 
+struct Range {
+    int start;
+    int stop;
+    int stride;
+};
+
 vector<struct Datatype> datatypes;
 
+Datatypes *createVecs(int count_start, int count_stop, int count_stride,
+                      int blen_start, int blen_stop, int blen_stride,
+                      int stride_start, int stride_stop, int stride_stride,
+                      list<struct Datatype> *subtypes,
+                      bool isHvector);
 %}
 
 %union {
@@ -65,7 +76,7 @@ vector<struct Datatype> datatypes;
 %token <sym> BYTE_ CHAR_ INT_ DOUBLE_ FLOAT_
 
 %type <types> datatype primitive derived contiguous vector hvector hindexed
-%type <indices> idxentries
+%type <indices> idxentries leftentry
 %type <index>   idxentry
 %type <range>   range
 
@@ -171,51 +182,35 @@ CONTIGUOUS '(' range ')' '[' datatype ']' {
 
 vector:
 VECTOR '(' range range range ')' '[' datatype ']' { 
-	$$ = new Datatypes;
-
-	list<struct Datatype> *subtypes = &($8->types);
-	list<struct Datatype> *types = &($$->types);
-
-	for(list<struct Datatype>::iterator subtype = subtypes->begin();
-		subtype != subtypes->end(); subtype++) {
-		for (int count=$3.start; count <= $3.stop; count += $3.stride) {
-			for (int blocklen=$4.start; blocklen <= $4.stop; blocklen += $4.stride) {
-				for (int stride=$5.start; stride <= $5.stop; stride += $5.stride) {
-					Datatype type;
-					type.farc = new farc::VectorDatatype(count, blocklen, stride, subtype->farc);
-					MPI_Type_vector(count, blocklen, stride, subtype->mpi, &(type.mpi));
-					types->push_back(type);
-				}
-			}
-		}
-	}
-
+    $$ = createVecs($3.start, $3.stop, $3.stride,
+                    $4.start, $4.stop, $4.stride,
+                    $5.start, $5.stop, $5.stride,
+                    &($8->types), false);
 	free($8);
+}
+| VECTOR '(' range ',' range ',' range ')' '[' datatype ']' { 
+    $$ = createVecs($3.start, $3.stop, $3.stride,
+                    $5.start, $5.stop, $5.stride,
+                    $7.start, $7.stop, $7.stride,
+                    &($10->types), false);
+	free($10);
 }
 ;
 
 hvector:
 HVECTOR '(' range range range ')' '[' datatype ']' {
-	$$ = new Datatypes;
-
-	list<struct Datatype> *subtypes = &($8->types);
-	list<struct Datatype> *types = &($$->types);
-
-	for(list<struct Datatype>::iterator subtype = subtypes->begin();
-		subtype != subtypes->end(); subtype++) {
-		for (int count=$3.start; count <= $3.stop; count += $3.stride) {
-			for (int blocklen=$4.start; blocklen <= $4.stop; blocklen += $4.stride) {
-				for (int stride=$5.start; stride <= $5.stop; stride += $5.stride) {
-					Datatype type;
-					type.farc = new farc::HVectorDatatype(count, blocklen, stride, subtype->farc);
-					MPI_Type_hvector(count, blocklen, stride, subtype->mpi, &(type.mpi));
-					types->push_back(type);
-				}
-			}
-		}
-	}
-
+    $$ = createVecs($3.start, $3.stop, $3.stride,
+                    $4.start, $4.stop, $4.stride,
+                    $5.start, $5.stop, $5.stride,
+                    &($8->types), true);
 	free($8);
+}
+| HVECTOR '(' range ',' range ',' range ')' '[' datatype ']' {
+    $$ = createVecs($3.start, $3.stop, $3.stride,
+                    $5.start, $5.stop, $5.stride,
+                    $7.start, $7.stop, $7.stride,
+                    &($10->types), true);
+	free($10);
 }
 ;
 
@@ -227,11 +222,20 @@ NUM ',' NUM {
 }
 ;
 
-idxentries:
-/* empty rule */ {
-	$$ = new Indices;
+leftentry:
+/* empty*/ {
+    $$ = new Indices;
 }
-| idxentries idxentry {
+| idxentries {
+    $$ = $1;
+}
+| idxentries ';' {
+    $$ = $1;
+}
+;
+
+idxentries:
+leftentry idxentry {
 	$$ = $1;
 	$$->indices.push_back($2);
 }
@@ -273,6 +277,44 @@ HINDEXED '(' idxentries ')' '[' datatype ']' {
 
 void yyerror(const char *s) {
 	fprintf (stderr, "Error: %s\n", s);
+}
+
+Datatypes *createVecs(int count_start, int count_stop, int count_stride,
+                      int blen_start, int blen_stop, int blen_stride,
+                      int stride_start, int stride_stop, int stride_stride,
+                      list<struct Datatype> *subtypes,
+                      bool isHvector) {
+	Datatypes *ret = new Datatypes;
+
+	list<struct Datatype> *types = &(ret->types);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		for (int count=count_start; count <= count_stop; count += count_stride) {
+			for (int blen=blen_start; blen <= blen_stop; blen += blen_stride) {
+				for (int stride=stride_start; stride <= stride_stop; stride += stride_stride) {
+					Datatype type;
+                    if (isHvector)
+                    {
+                        type.farc = new farc::HVectorDatatype(count, blen,
+                                                              stride, subtype->farc);
+                        MPI_Type_hvector(count, blen, stride,
+                                         subtype->mpi, &(type.mpi));
+
+                    }
+                    else {
+                        type.farc =new farc::VectorDatatype(count, blen,
+                                                            stride, subtype->farc);
+                        MPI_Type_vector(count, blen, stride,
+                                        subtype->mpi, &(type.mpi));
+                    }
+					types->push_back(type);
+				}
+			}
+		}
+	}
+
+    return ret;
 }
 
 int calc_num(int start, int stride, int stop) {
@@ -347,7 +389,7 @@ void produce_report() {
 	int unpack_spdup_w = 14;
 
 	for (unsigned int i=0; i<datatypes.size(); i++) {
-		int textSize = datatypes[i].farc->toString().size();
+		int textSize = datatypes[i].farc->toString(true).size();
 		if (textSize > name_w) {
 			name_w = textSize;
 		}
@@ -471,7 +513,7 @@ void produce_report() {
 
 		// output
 		cout.flags(std::ios::left);
-		cout << setw(name_w)        << datatype.farc->toString().c_str();
+		cout << setw(name_w)        << datatype.farc->toString(true).c_str();
 
 		cout.flags(ios::right);
 		cout.flags(ios::fixed);

@@ -172,8 +172,8 @@ void Datatype::compile(CompilationType type) {
     #endif
 }
 
-void Datatype::print() {
-    printf("%s\n", this->toString().c_str());
+void Datatype::print(bool nospaces) {
+    printf("%s\n", this->toString(nospaces).c_str());
 }
 
 
@@ -217,7 +217,7 @@ int PrimitiveDatatype::getSize() {
     return this->size;
 }
 
-string PrimitiveDatatype::toString() {
+string PrimitiveDatatype::toString(bool nospaces) {
     string res = "";
     switch (this->type) {
     case BYTE:
@@ -306,9 +306,9 @@ Datatype *ContiguousDatatype::getBasetype() {
     return this->basetype;
 }
 
-string ContiguousDatatype::toString() {
+string ContiguousDatatype::toString(bool nospaces) {
     stringstream res;
-    res << "ctg(" << this->count << ")[" << basetype->toString() << "]";
+    res << "ctg(" << this->count << ")[" << basetype->toString(nospaces) << "]";
     return res.str();
 }
 
@@ -402,10 +402,11 @@ Datatype *VectorDatatype::getBasetype() {
     return this->basetype;
 }
 
-string VectorDatatype::toString() {
+string VectorDatatype::toString(bool nospaces) {
     stringstream res;
-    res << "vec(" << this->count << " " << this->blocklen << " "
-        << this->stride << ")[" << basetype->toString() << "]";
+    string sep = (nospaces) ? "," : " ";
+    res << "vec(" << this->count << sep << this->blocklen << sep
+        << this->stride << ")[" << basetype->toString(nospaces) << "]";
     return res.str();
 }
 
@@ -496,9 +497,10 @@ Datatype *HVectorDatatype::getBasetype() {
     return this->basetype;
 }
 
-string HVectorDatatype::toString() {
+string HVectorDatatype::toString(bool nospaces) {
     stringstream res;
-    res << "hvec(" << this->count << " " << this->blocklen << " " << this->stride << ")[" << basetype->toString() << "]";
+    string sep = (nospaces) ? "," : " ";
+    res << "hvec(" << this->count << sep << this->blocklen << sep << this->stride << ")[" << basetype->toString(nospaces) << "]";
     return res.str();
 }
 
@@ -568,16 +570,17 @@ int IndexedBlockDatatype::getSize() {
     return sum;
 }
 
-string IndexedBlockDatatype::toString() {
+string IndexedBlockDatatype::toString(bool nospaces) {
     stringstream res;
+    string sep = (nospaces) ? ";" : " ";
     res << "idxb(" << this->count << " " << this->blocklen << ")[";
     for (unsigned int i=0; i<displs.size(); i++) {
         res << displs[i];
         if (i <displs.size() - 1) {
-            res << " ";
+            res << sep;
         }
     }
-    res << "]{" << basetype->toString() << "}";
+    res << "]{" << basetype->toString(nospaces) << "}";
     return res.str();
 }
 
@@ -646,16 +649,17 @@ int HIndexedDatatype::getSize() {
     return sum;
 }
 
-string HIndexedDatatype::toString() {
+string HIndexedDatatype::toString(bool nospaces) {
     stringstream res;
+    string sep = (nospaces) ? ";" : " ";
     res << "hidx(";
     for (unsigned int i=0; i<displs.size(); i++) {
         res << displs[i] << "," << blocklens[i];
         if (i <displs.size() - 1) {
-            res << " ";
+            res << sep;
         }
     }
-    res << ")[" << basetype->toString() << "]";
+    res << ")[" << basetype->toString(nospaces) << "]";
     return res.str();
 }
 
@@ -725,14 +729,15 @@ int StructDatatype::getSize() {
     return sum;
 }
 
-string StructDatatype::toString() {
+string StructDatatype::toString(bool nospaces) {
     stringstream res;
+    string sep = (nospaces) ? ";" : " ";
     res << "struct(" << this->count << ")";
     for (unsigned int i=0; i<displs.size(); i++) {
         res << "[" << this->displs[i] << "," << this->blocklens[i] << "]";
-        res << "{" << this->basetypes[i]->toString() << "}";
+        res << "{" << this->basetypes[i]->toString(nospaces) << "}";
         if (i <displs.size() - 1) {
-            res << " ";
+            res << sep;
         }
     }
     return res.str();

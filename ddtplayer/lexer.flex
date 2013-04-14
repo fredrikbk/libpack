@@ -24,7 +24,7 @@ letter        [a-zA-Z]
 {digit}+|-{digit}+   { yylval.val = atoi(yytext); return NUM; }
 
 
-[\[\]\(\):,]         { return yytext[0]; }
+[\[\]\(\):,;]        { return yytext[0]; }
 
 [ \t\n\r]            /* skip whitespace */
 

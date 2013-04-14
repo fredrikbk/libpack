@@ -24,8 +24,8 @@ public:
 
     virtual int getExtent() = 0;
     virtual int getSize() = 0;
-	virtual std::string toString() = 0;
-    virtual void print();
+	virtual std::string toString(bool nospaces = false) = 0;
+    virtual void print(bool nospaces = false);
 
     virtual void compile(CompilationType type);
     void (*pack)(void*, int, void*);
@@ -50,7 +50,7 @@ public:
 
     int getExtent();
     int getSize();
-    std::string toString();
+    std::string toString(bool nospaces = false);
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
@@ -73,7 +73,7 @@ public:
     int getSize();
     int getCount();
     Datatype *getBasetype();
-    std::string toString();
+    std::string toString(bool nospaces = false);
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
@@ -97,7 +97,7 @@ public:
     int getBlocklen();
     int getStride();
     Datatype *getBasetype();
-    std::string toString();
+    std::string toString(bool nospaces = false);
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
@@ -123,7 +123,7 @@ public:
     int getBlocklen();
     int getStride();
     Datatype *getBasetype();
-    std::string toString();
+    std::string toString(bool nospaces = false);
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
@@ -145,7 +145,7 @@ public:
 
     int getExtent();
     int getSize();
-    std::string toString();
+    std::string toString(bool nospaces = false);
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
@@ -167,7 +167,7 @@ public:
 
     int getExtent();
     int getSize();
-    std::string toString();
+    std::string toString(bool nospaces = false);
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
@@ -189,7 +189,7 @@ public:
 
     int getExtent();
     int getSize();
-    std::string toString();
+    std::string toString(bool nospaces = false);
 
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
