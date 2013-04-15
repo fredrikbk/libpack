@@ -172,8 +172,8 @@ void Datatype::compile(CompilationType type) {
     #endif
 }
 
-void Datatype::print(bool nospaces) {
-    printf("%s\n", this->toString(nospaces).c_str());
+void Datatype::print(bool summary) {
+    printf("%s\n", this->toString(summary).c_str());
 }
 
 
@@ -217,7 +217,7 @@ int PrimitiveDatatype::getSize() {
     return this->size;
 }
 
-string PrimitiveDatatype::toString(bool nospaces) {
+string PrimitiveDatatype::toString(bool summary) {
     string res = "";
     switch (this->type) {
     case BYTE:
@@ -306,9 +306,9 @@ Datatype *ContiguousDatatype::getBasetype() {
     return this->basetype;
 }
 
-string ContiguousDatatype::toString(bool nospaces) {
+string ContiguousDatatype::toString(bool summary) {
     stringstream res;
-    res << "ctg(" << this->count << ")[" << basetype->toString(nospaces) << "]";
+    res << "ctg(" << this->count << ")[" << basetype->toString(summary) << "]";
     return res.str();
 }
 
@@ -402,11 +402,11 @@ Datatype *VectorDatatype::getBasetype() {
     return this->basetype;
 }
 
-string VectorDatatype::toString(bool nospaces) {
+string VectorDatatype::toString(bool summary) {
     stringstream res;
-    string sep = (nospaces) ? "," : " ";
+    string sep = (summary) ? "," : " ";
     res << "vec(" << this->count << sep << this->blocklen << sep
-        << this->stride << ")[" << basetype->toString(nospaces) << "]";
+        << this->stride << ")[" << basetype->toString(summary) << "]";
     return res.str();
 }
 
@@ -497,10 +497,10 @@ Datatype *HVectorDatatype::getBasetype() {
     return this->basetype;
 }
 
-string HVectorDatatype::toString(bool nospaces) {
+string HVectorDatatype::toString(bool summary) {
     stringstream res;
-    string sep = (nospaces) ? "," : " ";
-    res << "hvec(" << this->count << sep << this->blocklen << sep << this->stride << ")[" << basetype->toString(nospaces) << "]";
+    string sep = (summary) ? "," : " ";
+    res << "hvec(" << this->count << sep << this->blocklen << sep << this->stride << ")[" << basetype->toString(summary) << "]";
     return res.str();
 }
 
@@ -570,17 +570,22 @@ int IndexedBlockDatatype::getSize() {
     return sum;
 }
 
-string IndexedBlockDatatype::toString(bool nospaces) {
+string IndexedBlockDatatype::toString(bool summary) {
     stringstream res;
-    string sep = (nospaces) ? ";" : " ";
-    res << "idxb(" << this->count << " " << this->blocklen << ")[";
-    for (unsigned int i=0; i<displs.size(); i++) {
-        res << displs[i];
-        if (i <displs.size() - 1) {
-            res << sep;
+    string sep = (summary) ? "," : " ";
+    if (summary) {
+        res << "idxb(" << this->count << "," << this->blocklen;
+    }
+    else {
+        res << "idxb("  << this->blocklen << ":";
+        for (unsigned int i=0; i<displs.size(); i++) {
+            res << displs[i];
+            if (i <displs.size() - 1) {
+                res << sep;
+            }
         }
     }
-    res << "]{" << basetype->toString(nospaces) << "}";
+    res << ")[" << basetype->toString(summary) << "]";
     return res.str();
 }
 
@@ -649,9 +654,9 @@ int HIndexedDatatype::getSize() {
     return sum;
 }
 
-string HIndexedDatatype::toString(bool nospaces) {
+string HIndexedDatatype::toString(bool summary) {
     stringstream res;
-    string sep = (nospaces) ? ";" : " ";
+    string sep = (summary) ? ";" : " ";
     res << "hidx(";
     for (unsigned int i=0; i<displs.size(); i++) {
         res << displs[i] << "," << blocklens[i];
@@ -659,7 +664,7 @@ string HIndexedDatatype::toString(bool nospaces) {
             res << sep;
         }
     }
-    res << ")[" << basetype->toString(nospaces) << "]";
+    res << ")[" << basetype->toString(summary) << "]";
     return res.str();
 }
 
@@ -729,13 +734,13 @@ int StructDatatype::getSize() {
     return sum;
 }
 
-string StructDatatype::toString(bool nospaces) {
+string StructDatatype::toString(bool summary) {
     stringstream res;
-    string sep = (nospaces) ? ";" : " ";
+    string sep = (summary) ? ";" : " ";
     res << "struct(" << this->count << ")";
     for (unsigned int i=0; i<displs.size(); i++) {
         res << "[" << this->displs[i] << "," << this->blocklens[i] << "]";
-        res << "{" << this->basetypes[i]->toString(nospaces) << "}";
+        res << "{" << this->basetypes[i]->toString(summary) << "}";
         if (i <displs.size() - 1) {
             res << sep;
         }
