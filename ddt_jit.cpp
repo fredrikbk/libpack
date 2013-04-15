@@ -69,6 +69,7 @@ Datatype::~Datatype() {
         this->funpack->eraseFromParent();
         this->unpack = NULL;
     }
+    cleanup();
 }
 
 
@@ -542,6 +543,10 @@ IndexedBlockDatatype::~IndexedBlockDatatype(void) {
     delete this->basetype;
 }
 
+void IndexedBlockDatatype::cleanup() {
+    if (indices_arr != NULL) indices_arr->eraseFromParent();
+}
+
 IndexedBlockDatatype* IndexedBlockDatatype::clone() {
     IndexedBlockDatatype* t_new = new IndexedBlockDatatype(this->count, this->blocklen, &(this->displs[0]), this->basetype);
     return t_new;
@@ -564,18 +569,20 @@ Datatype *IndexedBlockDatatype::compress() {
 }
 
 void IndexedBlockDatatype::globalCodegen(llvm::Module *mod) {
-    ArrayType* indices_types = ArrayType::get(LLVM_INT32, count);
-    this->indices_arr = new GlobalVariable(*mod, indices_types, true,
-                                           GlobalValue::InternalLinkage,
-                                           0, "displacements");
-    indices_arr->setAlignment(4);
+    if(count > IDXB_LOOP_TRESHOLD) {
+        ArrayType* indices_types = ArrayType::get(LLVM_INT32, count);
+        this->indices_arr = new GlobalVariable(*mod, indices_types, true,
+                                               GlobalValue::InternalLinkage,
+                                               0, "displacements");
+        indices_arr->setAlignment(4);
 
-    std::vector<Constant*> indices_vals(count);
-    for (int i=0; i<count; i++) {
-        indices_vals[i] = constNode(displs[i] * basetype->getExtent());
+        std::vector<Constant*> indices_vals(count);
+        for (int i=0; i<count; i++) {
+            indices_vals[i] = constNode(displs[i] * basetype->getExtent());
+        }
+        Constant* indices_initializer = ConstantArray::get(indices_types, indices_vals);
+        indices_arr->setInitializer(indices_initializer);
     }
-    Constant* indices_initializer = ConstantArray::get(indices_types, indices_vals);
-    indices_arr->setInitializer(indices_initializer);
 
     basetype->globalCodegen(mod);
 }

@@ -38,6 +38,9 @@ public:
     virtual void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     virtual void globalCodegen(llvm::Module *mod) = 0;
 
+    // TODO: remove this function
+    virtual void cleanup() {}
+
     llvm::Function* fpack;
     llvm::Function* funpack;
 };
@@ -166,6 +169,9 @@ private:
     Datatype* basetype;
 
     llvm::GlobalVariable* indices_arr;
+
+    // TODO Remove this funciton
+    void cleanup();
 };
 
 /* Class for hindexed types */

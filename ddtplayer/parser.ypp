@@ -85,6 +85,7 @@ Datatypes *createVecs(int count_start, int count_stop, int count_stride,
 %%
 
 input:
+topdatatype
 | input topdatatype 
 ;
 
