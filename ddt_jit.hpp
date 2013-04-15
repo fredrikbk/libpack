@@ -10,6 +10,7 @@ namespace llvm {
 class Value;
 class Function;
 class Module;
+class GlobalVariable;
 }
 
 namespace farc {
@@ -163,6 +164,8 @@ private:
     int blocklen;
     std::vector<int> displs;
     Datatype* basetype;
+
+    llvm::GlobalVariable* indices_arr;
 };
 
 /* Class for hindexed types */

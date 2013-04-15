@@ -2,8 +2,12 @@
 #define CODEGEN_H
 
 #include "ddt_jit.hpp"
-#include <llvm/IR/Value.h>
 #include <vector>
+
+namespace llvm {
+class Value;
+class GlobalVariable;
+}
 
 namespace farc {
 
@@ -22,9 +26,11 @@ void codegenVector(llvm::Value *inbuf, llvm::Value *incount,
                    bool pack);
 
 void codegenIndexedBlock(llvm::Value *compactbuf, llvm::Value *scatteredbuf,
-                         llvm::Value* incount, int extent, int count,
-                         int blocklen, Datatype *basetype,
-                         const std::vector<int> &displs, bool pack);
+                         llvm::Value* incount, int extent, int size,
+                         int count, int blocklen, Datatype *basetype,
+                         const std::vector<int> &displs,
+                         llvm::Value* indices_arr,
+                         bool pack);
 
 void codegenHindexed(llvm::Value *compactbuf, llvm::Value *scatteredbuf,
                      llvm::Value* incount, int extent, int count,

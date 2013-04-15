@@ -30,13 +30,6 @@
 #define LLVM_OUTPUT 0
 #endif
 
-// If LLVM_OUTPUT is set then we always want lazy
-#if LLVM_OUTPUT
-#undef LAZY
-#define LAZY 1
-#endif
-
-
 #define LLVM_VERIFY LLVM_OUTPUT
 #if LLVM_VERIFY
 #include "llvm/Analysis/Verifier.h"
@@ -115,43 +108,72 @@ void Datatype::compile(CompilationType type) {
     Datatype *ddt = this;
     #endif
 
+    // Create the global arrays needed by the datatypes
+    ddt->globalCodegen(module);
+
     bool pack   = (type == PACK_UNPACK || type == PACK)   ? true : false;
     bool unpack = (type == PACK_UNPACK || type == UNPACK) ? true : false;
     if (pack) {
-        Function *F = createFunctionHeader("pack");
+        this->fpack = createFunctionHeader("pack");
 
         // Create a new basic block to start insertion into.
-        BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", F);
+        BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", this->fpack);
         Builder.SetInsertPoint(BB);
 
         // generate code for the datatype
         ddt->packCodegen(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
         Builder.CreateRetVoid();
 
-        postProcessFunction(F);
+        postProcessFunction(this->fpack);
 
+        #if !LLVM_OUTPUT
         this->pack = (void (*)(void*,int,void*))(intptr_t)
-            TheExecutionEngine->getPointerToFunction(F);
-        this->fpack = F;
+            TheExecutionEngine->getPointerToFunction(this->fpack);
+        #endif
     }
 
     if (unpack) {
-        Function *F = createFunctionHeader("unpack");
+        this->funpack = createFunctionHeader("unpack");
 
         // Create a new basic block to start insertion into.
-        BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", F);
+        BasicBlock *BB = BasicBlock::Create(getGlobalContext(), "entry", this->funpack);
         Builder.SetInsertPoint(BB);
 
         // generate code for the datatype
         ddt->unpackCodegen(NamedValues["inbuf"], NamedValues["count"], NamedValues["outbuf"]);
         Builder.CreateRetVoid();
 
-        postProcessFunction(F);
+        postProcessFunction(this->funpack);
 
+        #if !LLVM_OUTPUT
         this->unpack = (void (*)(void*,int,void*))(intptr_t)
-            TheExecutionEngine->getPointerToFunction(F);
-        this->funpack = F;
+            TheExecutionEngine->getPointerToFunction(this->funpack);
+        #endif
     }
+
+    #if LLVM_OUTPUT
+    // std::vector<Type *> arg_type;
+    // arg_type.push_back(LLVM_INT8PTR);
+    // arg_type.push_back(LLVM_INT8PTR);
+    // arg_type.push_back(LLVM_INT64);
+    // Function *memcopy = Intrinsic::getDeclaration(module, Intrinsic::memcpy, arg_type);
+    // memcopy->dump();
+
+    // std::vector<Type *> prefetch_arg_type;
+    // Function *prefetch = Intrinsic::getDeclaration(module,Intrinsic::prefetch, prefetch_arg_type);
+    // prefetch->dump();
+
+    module->dump();
+
+    if (pack) {
+        this->pack = (void (*)(void*,int,void*))(intptr_t)
+            TheExecutionEngine->getPointerToFunction(this->fpack);
+    }
+    if (unpack) {
+        this->unpack = (void (*)(void*,int,void*))(intptr_t)
+            TheExecutionEngine->getPointerToFunction(this->funpack);
+    }
+    #endif
 
     #if DDT_OPTIMIZE
     delete ddt;
@@ -194,6 +216,10 @@ void PrimitiveDatatype::unpackCodegen(Value* inbuf, Value* incount,
 Datatype *PrimitiveDatatype::compress() {
     return new PrimitiveDatatype(this->type);
 }
+
+void PrimitiveDatatype::globalCodegen(llvm::Module *module) {
+
+};
 
 int PrimitiveDatatype::getExtent() {
     return this->extent;
@@ -275,6 +301,10 @@ Datatype *ContiguousDatatype::compress() {
 
     return datatype;
 }
+
+void ContiguousDatatype::globalCodegen(llvm::Module *mod) {
+    basetype->globalCodegen(mod);
+};
 
 int ContiguousDatatype::getExtent() {
     return this->count * this->basetype->getExtent();
@@ -362,6 +392,10 @@ Datatype *VectorDatatype::compress() {
 
     return datatype;
 }
+
+void VectorDatatype::globalCodegen(llvm::Module *mod) {
+    basetype->globalCodegen(mod);
+};
 
 int VectorDatatype::getExtent() {
     return (this->count - 1) * this->basetype->getExtent() *
@@ -458,6 +492,10 @@ Datatype *HVectorDatatype::compress() {
     return datatype;
 }
 
+void HVectorDatatype::globalCodegen(llvm::Module *mod) {
+    basetype->globalCodegen(mod);
+};
+
 int HVectorDatatype::getExtent() {
     if (this->stride > 0) return (this->count-1)*this->stride + this->blocklen*this->basetype->getExtent();
     else return (-((this->count-1)*this->stride + this->blocklen*this->basetype->getExtent()) + this->count*this->blocklen*this->basetype->getExtent());
@@ -497,6 +535,7 @@ IndexedBlockDatatype::IndexedBlockDatatype(int count, int blocklen, int* displ, 
     this->basetype = basetype->clone();
     this->blocklen = blocklen;
     for (int i=0; i<count; i++) this->displs.push_back(displ[i]);
+    indices_arr = NULL;
 }
 
 IndexedBlockDatatype::~IndexedBlockDatatype(void) {
@@ -509,23 +548,36 @@ IndexedBlockDatatype* IndexedBlockDatatype::clone() {
 }
 
 void IndexedBlockDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenIndexedBlock(outbuf, inbuf, incount, this->getExtent(), this->count,
-                        this->blocklen, this->basetype, this->displs, true);
+    codegenIndexedBlock(outbuf, inbuf, incount, this->getExtent(), this->getSize(), this->count,
+                        this->blocklen, this->basetype, this->displs, indices_arr, true);
 }
 
 void IndexedBlockDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenIndexedBlock(inbuf, outbuf, incount, this->getExtent(), this->count,
-                        this->blocklen, this->basetype, this->displs, false);
+    codegenIndexedBlock(inbuf, outbuf, incount, this->getExtent(), this->getSize(), this->count,
+                        this->blocklen, this->basetype, this->displs, indices_arr, false);
 }
 
 Datatype *IndexedBlockDatatype::compress() {
     Datatype *cbasetype = this->basetype->compress();
-    Datatype *datatype;
+    return new IndexedBlockDatatype(this->count, this->blocklen,
+                                    &(this->displs[0]), cbasetype);
+}
 
-    datatype = new IndexedBlockDatatype(this->count, this->blocklen,
-                                        &(this->displs[0]), cbasetype);
+void IndexedBlockDatatype::globalCodegen(llvm::Module *mod) {
+    ArrayType* indices_types = ArrayType::get(LLVM_INT32, count);
+    this->indices_arr = new GlobalVariable(*mod, indices_types, true,
+                                           GlobalValue::InternalLinkage,
+                                           0, "displacements");
+    indices_arr->setAlignment(4);
 
-    return datatype;
+    std::vector<Constant*> indices_vals(count);
+    for (int i=0; i<count; i++) {
+        indices_vals[i] = constNode(displs[i] * basetype->getExtent());
+    }
+    Constant* indices_initializer = ConstantArray::get(indices_types, indices_vals);
+    indices_arr->setInitializer(indices_initializer);
+
+    basetype->globalCodegen(mod);
 }
 
 int IndexedBlockDatatype::getExtent() {
@@ -605,13 +657,13 @@ void HIndexedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf
 
 Datatype *HIndexedDatatype::compress() {
     Datatype *cbasetype = this->basetype->compress();
-    Datatype *datatype;
-
-    datatype = new HIndexedDatatype(this->count, &(this->blocklens[0]),
-                                    &(this->displs[0]), cbasetype);
-
-    return datatype;
+    return new HIndexedDatatype(this->count, &(this->blocklens[0]),
+                                &(this->displs[0]), cbasetype);
 }
+
+void HIndexedDatatype::globalCodegen(llvm::Module *mod) {
+    basetype->globalCodegen(mod);
+};
 
 int HIndexedDatatype::getExtent() {
     if (this->count == 0) return 0;
@@ -688,13 +740,15 @@ Datatype *StructDatatype::compress() {
     for (unsigned int i=0 ; i<this->basetypes.size(); i++) {
         cbasetypes[i] = this->basetypes[i]->compress();
     }
-    Datatype *datatype;
-
-    datatype = new StructDatatype(this->count, &(this->blocklens[0]),
+    return new StructDatatype(this->count, &(this->blocklens[0]),
                                   &(this->displs[0]), &(this->basetypes[0]));
-
-    return datatype;
 }
+
+void StructDatatype::globalCodegen(llvm::Module *mod) {
+    for (unsigned int i=0 ; i<this->basetypes.size(); i++) {
+        basetypes[i]->globalCodegen(mod);
+    }
+};
 
 int StructDatatype::getExtent() {
     if (this->count == 0) return 0;
@@ -740,20 +794,6 @@ void DDT_Commit(Datatype* ddt) {
 #endif
 #if !LAZY
     ddt->compile(Datatype::PACK_UNPACK);
-#endif
-#if LLVM_OUTPUT
-    // std::vector<Type *> arg_type;
-    // arg_type.push_back(LLVM_INT8PTR);
-    // arg_type.push_back(LLVM_INT8PTR);
-    // arg_type.push_back(LLVM_INT64);
-    // Function *memcopy = Intrinsic::getDeclaration(module, Intrinsic::memcpy, arg_type);
-    // memcopy->dump();
-
-    // std::vector<Type *> prefetch_arg_type;
-    // Function *prefetch = Intrinsic::getDeclaration(module,Intrinsic::prefetch, prefetch_arg_type);
-    // prefetch->dump();
-
-    module->dump();
 #endif
 }
 
