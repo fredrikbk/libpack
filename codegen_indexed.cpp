@@ -9,9 +9,6 @@ using namespace std;
 
 namespace farc {
 
-#define IDXB_LOOP_TRESHOLD  16
-#define IDXB_LOOP_UNROLL    1
-
 void codegenIndexedBlock(Value *compactbuf, Value *scatteredbuf, Value* incount,
                          int extent, int size, int count, int blocklen, Datatype *basetype,
                          const vector<int> &displs, Value* indices_arr,

@@ -9,6 +9,9 @@ class Value;
 class GlobalVariable;
 }
 
+#define IDXB_LOOP_TRESHOLD  16
+#define IDXB_LOOP_UNROLL    1
+
 namespace farc {
 
 void codegenPrimitive(llvm::Value* inbuf, llvm::Value* incount,
