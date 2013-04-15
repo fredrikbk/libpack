@@ -47,23 +47,27 @@ void codegenIndexedBlock(Value *compactbuf, Value *scatteredbuf, Value* incount,
         PHINode* contig2 = Builder.CreatePHI(LLVM_INT64, 2, "contig2");
         contig2->addIncoming(contig1, outerloop);                
 
-        std::vector<Value*> arrayidx_list;
-        arrayidx_list.push_back(constNode((long)0));
-        arrayidx_list.push_back(i);
-        Value* displloc = Builder.CreateGEP(indices_arr, arrayidx_list, "displloc");
-        Value* displ = Builder.CreateLoad(displloc, "displ");
-        Value* displ64 = Builder.CreateZExt(displ, LLVM_INT64, "displ64");
-        Value *noncontig2 = Builder.CreateAdd(noncontig1, displ64, "noncontig2");
+        Value* nextcontig2 = contig2;
+        Value* nexti = i;
+        for (int j=0; j<IDXB_LOOP_UNROLL; j++) {
+            std::vector<Value*> arrayidx_list;
+            arrayidx_list.push_back(constNode((long)0));
+            arrayidx_list.push_back(nexti);
+            Value* displloc = Builder.CreateGEP(indices_arr, arrayidx_list, "displloc");
+            Value* displ = Builder.CreateLoad(displloc, "displ");
+            Value* displ64 = Builder.CreateZExt(displ, LLVM_INT64, "displ64");
+            Value *noncontig2 = Builder.CreateAdd(noncontig1, displ64, "noncontig2");
 
-        Value* contig2ptr = Builder.CreateIntToPtr(contig2, LLVM_INT8PTR, "contig2ptr");
-        Value* noncontig2ptr = Builder.CreateIntToPtr(noncontig2, LLVM_INT8PTR, "noncontig2ptr");
+            Value* contig2ptr = Builder.CreateIntToPtr(nextcontig2, LLVM_INT8PTR, "contig2ptr");
+            Value* noncontig2ptr = Builder.CreateIntToPtr(noncontig2, LLVM_INT8PTR, "noncontig2ptr");
 
-        if (pack) basetype->packCodegen(noncontig2ptr, constNode(blocklen), contig2ptr);
-        else      basetype->unpackCodegen(contig2ptr, constNode(blocklen), noncontig2ptr);
+            if (pack) basetype->packCodegen(noncontig2ptr, constNode(blocklen), contig2ptr);
+            else      basetype->unpackCodegen(contig2ptr, constNode(blocklen), noncontig2ptr);
 
-        Value* nextcontig2 =
-            Builder.CreateAdd(contig2, constNode((long)blocklen*basetype->getExtent()), "nextcontig2");
-        Value* nexti = Builder.CreateAdd(i, constNode((long)IDXB_LOOP_UNROLL), "nexti");
+            nextcontig2 =
+                Builder.CreateAdd(nextcontig2, constNode((long)blocklen*basetype->getExtent()), "nextcontig2");
+            nexti = Builder.CreateAdd(nexti, constNode((long)1), "nexti");
+        }
 
         contig2->addIncoming(nextcontig2, innerloop);
         i->addIncoming(nexti, innerloop);

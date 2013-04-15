@@ -69,6 +69,7 @@ Datatype::~Datatype() {
         this->funpack->eraseFromParent();
         this->unpack = NULL;
     }
+    cleanup();
 }
 
 
@@ -540,6 +541,10 @@ IndexedBlockDatatype::IndexedBlockDatatype(int count, int blocklen, int* displ, 
 
 IndexedBlockDatatype::~IndexedBlockDatatype(void) {
     delete this->basetype;
+}
+
+void IndexedBlockDatatype::cleanup() {
+    if (indices_arr != NULL) indices_arr->eraseFromParent();
 }
 
 IndexedBlockDatatype* IndexedBlockDatatype::clone() {
