@@ -439,8 +439,8 @@ void produce_report() {
 	int farc_pack_w    = 11;
 	int pack_spdup_w   = 12;
 	int mpi_unpack_w   = 12;
-	int farc_unpack_w  = 13;
-	int unpack_spdup_w = 14;
+	int farc_unpack_w  = 14;
+	int unpack_spdup_w = 15;
 
 	for (unsigned int i=0; i<datatypes.size(); i++) {
 		int textSize = datatypes[i].farc->toString(true).size();
@@ -562,8 +562,8 @@ void produce_report() {
                  << ": MPI and FARC output buffers differ after unpacking" << endl; 
 		}
 
-		double pack_speedup   = ((mpi_pack_time/farc_pack_time)-1)*100;
-		double unpack_speedup = ((mpi_unpack_time/farc_unpack_time)-1)*100;
+		double pack_speedup   = ((mpi_pack_time/farc_pack_time)-1);
+		double unpack_speedup = ((mpi_unpack_time/farc_unpack_time)-1);
 
 		// output
 		cout.flags(std::ios::left);
@@ -578,8 +578,8 @@ void produce_report() {
 			 << setw(farc_pack_w)      << setprecision(3) << farc_pack_time
 			 << setw(mpi_unpack_w)     << setprecision(3) << mpi_unpack_time
 			 << setw(farc_unpack_w)    << setprecision(3) << farc_unpack_time
-			 << setw(pack_spdup_w-1)   << setprecision(1) << pack_speedup     << "%"
-			 << setw(unpack_spdup_w-1) << setprecision(1) << unpack_speedup   << "%"
+			 << setw(pack_spdup_w-1)   << setprecision(1) << pack_speedup
+			 << setw(unpack_spdup_w-1) << setprecision(1) << unpack_speedup
 			 << endl;
 
 		// free buffers
