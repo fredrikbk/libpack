@@ -56,7 +56,7 @@ using namespace llvm;
 
 namespace farc {
 
-static Module *TheModule;
+static Module *module;
 static std::map<std::string, Value*> NamedValues;
 static ExecutionEngine *TheExecutionEngine;
 
@@ -103,20 +103,6 @@ static inline void postProcessFunction(Function *F) {
 #endif
 #if LLVM_OPTIMIZE
     TheFPM->run(*F);
-#endif
-#if LLVM_OUTPUT
-    F->dump();
-
-    std::vector<Type *> arg_type;
-    arg_type.push_back(LLVM_INT8PTR);
-    arg_type.push_back(LLVM_INT8PTR);
-    arg_type.push_back(LLVM_INT64);
-    Function *memcopy = Intrinsic::getDeclaration(TheModule, Intrinsic::memcpy, arg_type);
-    memcopy->dump();
-
-    // std::vector<Type *> prefetch_arg_type;
-    // Function *prefetch = Intrinsic::getDeclaration(TheModule,Intrinsic::prefetch, prefetch_arg_type);
-    // prefetch->dump();
 #endif
 }
 
@@ -755,6 +741,20 @@ void DDT_Commit(Datatype* ddt) {
 #if !LAZY
     ddt->compile(Datatype::PACK_UNPACK);
 #endif
+#if LLVM_OUTPUT
+    // std::vector<Type *> arg_type;
+    // arg_type.push_back(LLVM_INT8PTR);
+    // arg_type.push_back(LLVM_INT8PTR);
+    // arg_type.push_back(LLVM_INT64);
+    // Function *memcopy = Intrinsic::getDeclaration(module, Intrinsic::memcpy, arg_type);
+    // memcopy->dump();
+
+    // std::vector<Type *> prefetch_arg_type;
+    // Function *prefetch = Intrinsic::getDeclaration(module,Intrinsic::prefetch, prefetch_arg_type);
+    // prefetch->dump();
+
+    module->dump();
+#endif
 }
 
 // this calls the pack/unpack function
@@ -786,11 +786,11 @@ void DDT_Free(Datatype* ddt) {
 void DDT_Init() {
     InitializeNativeTarget();
     LLVMContext &Context = getGlobalContext();
-    TheModule = new Module("FARC-JIT", Context);
+    module = new Module("FARC-JIT", Context);
 
     // Create the JIT.  This takes ownership of the module.
     std::string ErrStr;
-    EngineBuilder engine_builder(TheModule);
+    EngineBuilder engine_builder(module);
     engine_builder.setEngineKind(EngineKind::JIT);
     engine_builder.setOptLevel(CodeGenOpt::Aggressive);
     engine_builder.setErrorStr(&ErrStr);
@@ -815,7 +815,7 @@ void DDT_Init() {
 
 
 #if LLVM_OPTIMIZE
-    FunctionPassManager* OurFPM = new FunctionPassManager(TheModule);
+    FunctionPassManager* OurFPM = new FunctionPassManager(module);
 
     /*
     PassManagerBuilder Builder;

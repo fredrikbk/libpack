@@ -7,8 +7,9 @@
 
 /* Forward declare llvm values */
 namespace llvm {
-    class Value;
-    class Function;
+class Value;
+class Function;
+class Module;
 }
 
 namespace farc {
@@ -24,16 +25,17 @@ public:
 
     virtual int getExtent() = 0;
     virtual int getSize() = 0;
-	virtual std::string toString(bool nospaces = false) = 0;
-    virtual void print(bool nospaces = false);
+	virtual std::string toString(bool summary = false) = 0;
+    virtual void print(bool summary = false);
 
     virtual void compile(CompilationType type);
     void (*pack)(void*, int, void*);
     void (*unpack)(void*, int, void*);
 
+    virtual Datatype *compress() = 0;
     virtual void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
     virtual void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf) = 0;
-    virtual Datatype *compress() = 0;
+    virtual void globalCodegen(llvm::Module *mod) = 0;
 
     llvm::Function* fpack;
     llvm::Function* funpack;
@@ -50,11 +52,12 @@ public:
 
     int getExtent();
     int getSize();
-    std::string toString(bool nospaces = false);
+    std::string toString(bool summary = false);
 
+    Datatype *compress();
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    Datatype *compress();
+    void globalCodegen(llvm::Module *mod);
 
 private:
     PrimitiveDatatype::PrimitiveType type;
@@ -73,11 +76,12 @@ public:
     int getSize();
     int getCount();
     Datatype *getBasetype();
-    std::string toString(bool nospaces = false);
+    std::string toString(bool summary = false);
 
+    Datatype *compress();
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    Datatype *compress();
+    void globalCodegen(llvm::Module *mod);
 
 private:
     int count;
@@ -97,11 +101,12 @@ public:
     int getBlocklen();
     int getStride();
     Datatype *getBasetype();
-    std::string toString(bool nospaces = false);
+    std::string toString(bool summary = false);
 
+    Datatype *compress();
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    Datatype *compress();
+    void globalCodegen(llvm::Module *mod);
 
 private:
     int count;
@@ -123,11 +128,12 @@ public:
     int getBlocklen();
     int getStride();
     Datatype *getBasetype();
-    std::string toString(bool nospaces = false);
+    std::string toString(bool summary = false);
 
+    Datatype *compress();
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    Datatype *compress();
+    void globalCodegen(llvm::Module *mod);
 
 private:
     int count;
@@ -145,11 +151,12 @@ public:
 
     int getExtent();
     int getSize();
-    std::string toString(bool nospaces = false);
+    std::string toString(bool summary = false);
 
+    Datatype *compress();
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    Datatype *compress();
+    void globalCodegen(llvm::Module *mod);
 
 private:
     int count;
@@ -167,11 +174,12 @@ public:
 
     int getExtent();
     int getSize();
-    std::string toString(bool nospaces = false);
+    std::string toString(bool summary = false);
 
+    Datatype *compress();
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    Datatype *compress();
+    void globalCodegen(llvm::Module *mod);
 
 private:
     int count;
@@ -189,11 +197,12 @@ public:
 
     int getExtent();
     int getSize();
-    std::string toString(bool nospaces = false);
+    std::string toString(bool summary = false);
 
+    Datatype *compress();
     void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
     void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
-    Datatype *compress();
+    void globalCodegen(llvm::Module *mod);
 
 private:
     int count;
