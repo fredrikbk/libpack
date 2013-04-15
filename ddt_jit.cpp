@@ -80,7 +80,7 @@ Datatype::~Datatype() {
 
 
 static inline Function* createFunctionHeader(const char *name) {
-    Function* F = Function::Create(FT, Function::ExternalLinkage, "pack", TheModule);
+    Function* F = Function::Create(FT, Function::ExternalLinkage, name, module);
     F->setDoesNotThrow();
     F->setDoesNotAlias(1);
     F->setDoesNotAlias(3);
