@@ -33,7 +33,7 @@ struct Datatypes {
 };
 
 struct Index {
-	int displ;
+	long displ;
 	int blocklen;
 };
 
@@ -72,12 +72,12 @@ Datatypes *createVecs(int count_start, int count_stop, int count_stride,
 
 %token <val> NUM
 %token <sym> UNKNOWN SUBTYPE ELEM
-%token <sym> CONTIGUOUS VECTOR HVECTOR HINDEXED STRUCT
+%token <sym> CONTIGUOUS VECTOR HVECTOR HINDEXED INDEXEDBLOCK STRUCT
 %token <sym> BYTE_ CHAR_ INT_ DOUBLE_ FLOAT_
 
-%type <types> datatype primitive derived contiguous vector hvector hindexed
-%type <indices> idxentries leftentry
-%type <index>   idxentry
+%type <types>   datatype primitive derived contiguous vector hvector hindexed indexedblock
+%type <indices> idxentries leftidxentry idxbentries leftidxbentry
+%type <index>   idxentry idxbentry
 %type <range>   range
 
 %start input
@@ -142,6 +142,7 @@ derived:
 contiguous
 | vector
 | hvector
+| indexedblock
 | hindexed
 ;
 
@@ -156,8 +157,6 @@ NUM {
 	$$.stride = $3;
 	$$.stop = $5;
 }
-
-
 
 contiguous:
 CONTIGUOUS '(' range ')' '[' datatype ']' {
@@ -214,6 +213,61 @@ HVECTOR '(' range range range ')' '[' datatype ']' {
 }
 ;
 
+idxbentry:
+NUM {
+	$$ = new Index;
+	$$->displ = $1;
+}
+;
+
+leftidxbentry:
+/* empty */ {
+    $$ = new Indices;
+}
+| idxbentries {
+    $$ = $1;
+}
+| idxbentries ',' {
+    $$ = $1;
+}
+;
+
+idxbentries:
+leftidxbentry idxbentry {
+	$$ = $1;
+	$$->indices.push_back($2);
+}
+;
+
+indexedblock:
+INDEXEDBLOCK '(' NUM ':' idxbentries ')' '[' datatype ']' {
+	$$ = new Datatypes;
+
+	list<struct Datatype> *subtypes = &($8->types);
+	list<struct Datatype> *types = &($$->types);
+
+	unsigned int num = $5->indices.size();
+	int *displs = (int*)malloc(num * sizeof(int));
+
+	for(int i=0; i<num; i++) {
+		displs[i] = $5->indices[i]->displ;
+		free($5->indices[i]);
+	}
+	free($5);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+		Datatype type;
+		type.farc = new farc::IndexedBlockDatatype(num, $3, displs, subtype->farc);
+		MPI_Type_create_indexed_block(num, $3, displs, subtype->mpi, &(type.mpi));
+		types->push_back(type);
+	}
+
+	free(displs);
+	free($8);
+}
+;
+
 idxentry:
 NUM ',' NUM {
 	$$ = new Index;
@@ -222,7 +276,7 @@ NUM ',' NUM {
 }
 ;
 
-leftentry:
+leftidxentry:
 /* empty*/ {
     $$ = new Indices;
 }
@@ -235,7 +289,7 @@ leftentry:
 ;
 
 idxentries:
-leftentry idxentry {
+leftidxentry idxentry {
 	$$ = $1;
 	$$->indices.push_back($2);
 }
@@ -441,10 +495,11 @@ void produce_report() {
             exit(EXIT_FAILURE);
         }
 
-        // TODO Remove this. The *2 is used to provide "centered"
-        // buffer in case of negative strides.  It is a workaround
-        // until farc supports
-        extent = extent * 2;
+        // TODO Remove this. The *4 is used to provide "centered"
+        // buffer in case of negative strides and in case of lower
+        // bounds higher than 0.  It is a workaround until farc
+        // supports these concepts.
+        extent = extent * 4;
        
 		void *mpi_bigbuf, *mpi_smallbuf;
 		alloc_buffer(size, &mpi_smallbuf, ALIGNMENT);
@@ -470,7 +525,6 @@ void produce_report() {
 		TIME_HOT( {int pos=0; MPI_Pack(mpi_bigbuf_centered, 1, datatype.mpi, mpi_smallbuf, size, &pos, MPI_COMM_WORLD);}, mpi_pack_time );
 
 		// farc pack
-
 		init_buffer(extent, farc_bigbuf, true);
 		init_buffer(size, farc_smallbuf, false);
 		TIME_HOT( DDT_Pack(farc_bigbuf_centered, farc_smallbuf, datatype.farc, 1), farc_pack_time);

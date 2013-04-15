@@ -18,6 +18,7 @@ letter        [a-zA-Z]
 "vec"                { return VECTOR; }
 "hvec"               { return HVECTOR; }
 "hidx"               { return HINDEXED; }
+"idxb"               { return INDEXEDBLOCK; }
 
 [-]                  { return ELEM; }
 
