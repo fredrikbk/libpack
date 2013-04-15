@@ -77,8 +77,8 @@ void codegenIndexedBlock(Value *compactbuf, Value *scatteredbuf, Value* incount,
 
         Value* nextnoncontig1 =
             Builder.CreateAdd(noncontig1, constNode((long)extent), "nextnoncontig1");
-        Value* nextcontig1 =
-            Builder.CreateAdd(contig1, constNode((long)size), "nextcontig1");
+        Value* nextcontig1 = nextcontig2;
+            // Builder.CreateAdd(contig1, constNode((long)size), "nextcontig1");
 
         noncontig1->addIncoming(nextnoncontig1, innerpost);
         contig1->addIncoming(nextcontig1, innerpost);
