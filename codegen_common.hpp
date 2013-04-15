@@ -4,6 +4,7 @@
 #include "ddt_jit.hpp"
 
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
 
 #define LLVM_VOID     Type::getVoidTy(getGlobalContext())
@@ -20,8 +21,8 @@ namespace farc {
 extern llvm::IRBuilder<> Builder;
 
 llvm::Value* multNode(int op1, llvm::Value* op2PtrNode);
-llvm::Value* constNode(int val);
-llvm::Value* constNode(long val);
+llvm::ConstantInt* constNode(int val);
+llvm::ConstantInt* constNode(long val);
 
 void vmove(llvm::Value *dst, llvm::Value *src, int count, llvm::Type *elemtype);
 llvm::Value *incrementPtr(llvm::Value *ptr, int byteInc);

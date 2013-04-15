@@ -1,7 +1,6 @@
 #include "codegen_common.hpp"
 
 #include <cstdio>
-#include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 
 using namespace llvm;
@@ -16,11 +15,11 @@ Value* multNode(int op1, Value* op2PtrNode) {
     return Builder.CreateMul(op1Node, op2Node);
 }
 
-Value* constNode(int val) {
+ConstantInt* constNode(int val) {
     return ConstantInt::get(getGlobalContext(), APInt(32, val, false));
 }
 
-Value* constNode(long val) {
+ConstantInt* constNode(long val) {
     return ConstantInt::get(getGlobalContext(), APInt(64, val, false));
 }
 
