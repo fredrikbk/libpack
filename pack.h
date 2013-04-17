@@ -1,57 +1,57 @@
-#ifndef FARC_INCLUDED
-#define FARC_INCLUDED
+#ifndef LPK_INCLUDED
+#define LPK_INCLUDED
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-typedef void* FARC_Datatype;
-typedef int   FARC_Primitivetype;
+typedef void* LPK_Datatype;
+typedef int   LPK_Primitivetype;
 
-#define FARC_CHAR                0 
-#define FARC_SIGNED_CHAR         1
-#define FARC_UNSIGNED_CHAR       2
-#define FARC_BYTE                3
-#define FARC_WCHAR               4
-#define FARC_SHORT               5
-#define FARC_UNSIGNED_SHORT      6
-#define FARC_INT                 7
-#define FARC_UNSIGNED            8
-#define FARC_LONG                9
-#define FARC_UNSIGNED_LONG      10
-#define FARC_FLOAT              11
-#define FARC_DOUBLE             12
-#define FARC_LONG_DOUBLE        13
-#define FARC_LONG_LONG_INT      14
-#define FARC_UNSIGNED_LONG_LONG 15
-#define FARC_LONG_LONG          16
+#define LPK_CHAR                0
+#define LPK_SIGNED_CHAR         1
+#define LPK_UNSIGNED_CHAR       2
+#define LPK_BYTE                3
+#define LPK_WCHAR               4
+#define LPK_SHORT               5
+#define LPK_UNSIGNED_SHORT      6
+#define LPK_INT                 7
+#define LPK_UNSIGNED            8
+#define LPK_LONG                9
+#define LPK_UNSIGNED_LONG      10
+#define LPK_FLOAT              11
+#define LPK_DOUBLE             12
+#define LPK_LONG_DOUBLE        13
+#define LPK_LONG_LONG_INT      14
+#define LPK_UNSIGNED_LONG_LONG 15
+#define LPK_LONG_LONG          16
 
-typedef long FARC_Aint;
+typedef long LPK_Aint;
 
 
 /* Functions */
-int FARC_Init();
-int FARC_Finalize();
+int LPK_Init();
+int LPK_Finalize();
 
-int FARC_Primitive(FARC_Primitivetype primitivetype, FARC_Datatype *newtype_p);
-int FARC_Contiguous(int count, FARC_Datatype oldtype, FARC_Datatype *newtype_p);
-int FARC_Vector(int count, int blocklen, int stride, FARC_Datatype oldtype, FARC_Datatype *newtype_p);
-int FARC_Hvector(int count, int blocklen, FARC_Aint stride, FARC_Datatype oldtype, FARC_Datatype *newtype_p);
-int FARC_Indexed_block(int count, int blocklen, int displacements[], FARC_Datatype oldtype, FARC_Datatype *newtype_p);
-int FARC_Hindexed(int count, int blocklens[], FARC_Aint displacements[], FARC_Datatype oldtype, FARC_Datatype *newtype_p);
-int FARC_Struct(int count, int blocklens[], FARC_Aint displacements[], FARC_Datatype oldtypes[], FARC_Datatype *newtype_p);
+int LPK_Primitive(LPK_Primitivetype primitivetype, LPK_Datatype *newtype_p);
+int LPK_Contiguous(int count, LPK_Datatype oldtype, LPK_Datatype *newtype_p);
+int LPK_Vector(int count, int blocklen, int stride, LPK_Datatype oldtype, LPK_Datatype *newtype_p);
+int LPK_Hvector(int count, int blocklen, LPK_Aint stride, LPK_Datatype oldtype, LPK_Datatype *newtype_p);
+int LPK_Indexed_block(int count, int blocklen, int displacements[], LPK_Datatype oldtype, LPK_Datatype *newtype_p);
+int LPK_Hindexed(int count, int blocklens[], LPK_Aint displacements[], LPK_Datatype oldtype, LPK_Datatype *newtype_p);
+int LPK_Struct(int count, int blocklens[], LPK_Aint displacements[], LPK_Datatype oldtypes[], LPK_Datatype *newtype_p);
 
-int FARC_Free(FARC_Datatype *ddt);
+int LPK_Free(LPK_Datatype *ddt);
 
-int FARC_Commit(FARC_Datatype *ddt);
-int FARC_Commit_pack(FARC_Datatype *ddt);
-int FARC_Commit_unpack(FARC_Datatype *ddt);
+int LPK_Commit(LPK_Datatype *ddt);
+int LPK_Commit_pack(LPK_Datatype *ddt);
+int LPK_Commit_unpack(LPK_Datatype *ddt);
 
-int FARC_Pack(void* inbuf, int incount, FARC_Datatype intype, void* outbuf);
-int FARC_Unpack(void* inbuf, void* outbuf, int outcount, FARC_Datatype outtype);
+int LPK_Pack(void* inbuf, int incount, LPK_Datatype intype, void* outbuf);
+int LPK_Unpack(void* inbuf, void* outbuf, int outcount, LPK_Datatype outtype);
 
-int FARC_Get_extent(FARC_Datatype datatype, FARC_Aint *lb, FARC_Aint *extent);
-int FARC_Get_size(FARC_Datatype datatype, int *size);
+int LPK_Get_extent(LPK_Datatype datatype, LPK_Aint *lb, LPK_Aint *extent);
+int LPK_Get_size(LPK_Datatype datatype, int *size);
 
 #if defined(__cplusplus)
 }
