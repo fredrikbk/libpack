@@ -1,43 +1,41 @@
 #!/usr/bin/make
 
-CXX=clang++
+CXX=mpic++
+CC=mpicxx
+MPIRUN_CMD=mpirun -n 2
+FARCDIR=..
 
-CFLAGS_MPI=-D_FORTIFY_SOURCE=2 -I/usr/include/mpich2
-LDFLAGS_MPI=-Wl,-z,relro -L/usr/lib
-LDLIBS_MPI=-lmpich -lopa -lrt -lpthread -lmpl -lcr
+LDLIBS=-lfarcinterposer $(shell llvm-config --libs all)
+LDFLAGS=-L$(FARCDIR) $(shell llvm-config --ldflags) #-dynamic
+CPPFLAGS= -O3 $(shell llvm-config --cppflags)
 
-LDLIBS=$(shell llvm-config --libs all) $(LDLIBS_MPI)
-LDFLAGS=$(shell llvm-config --ldflags) $(LDFLAGS_MPI)
-CFLAGS=-g3 $(shell llvm-config --cppflags) $(CFLAGS_MPI)
 
-BINARIES=$(shell ls *.c | sed -e 's/.c$$//g';)
+TESTS=$(shell ls *.c | sed -e 's/.c$$//g';)
 
-SOURCES=$(shell ls *.c;) ../interposer.c ../interposer_common.cpp
+all: $(TESTS)
 
-all: $(BINARIES)
-	./runtests.sh
+run: all
+	@for i in $(TESTS); do $(MPIRUN_CMD) ./$$i; done
 
 -include Makefile.deps
 
-Makefile.deps:
-	$(CXX) $(CFLAGS) -MM -x c++ $(SOURCES) > Makefile.deps
+$(FARCDIR)/libfarc.a: $(FARCDIR)/*.cpp $(FARCDIR)/*.hpp
+	make -C $(FARCDIR) libfarc.a
 
-%.o: %.c
-	$(CC) -c $(CFLAGS) $< -o $@
-
-interposer.o:
-	$(CXX) $(CFLAGS) -c ../interposer.c -o ../interposer.o
-
-interposer_common.o:
-	$(CXX) $(CFLAGS) -c ../interposer_common.cpp -o ../interposer_common.o
-
-%: %.o interposer.o interposer_common.o
-	$(CXX) $(LDFLAGS) $< ../interposer.o ../interposer_common.o -o $@ $(LDLIBS)
-
-%: %.c
 
 clean:
+	rm -f $(TESTS)
 	rm -f *.o
 	rm -f Makefile.deps
-	rm -f $(BINARIES)
+
+Makefile.deps:
+	$(CXX) $(CPPFLAGS) -MM *.cpp > Makefile.deps
+
+show_ir:
+	clang -emit-llvm -c input.c -o tmp.bc
+	llc-3.1 -march=cpp tmp.bc -o output.cpp
+
+
+
+
 

@@ -30,6 +30,10 @@ int main(int argc, char** argv) {
     MPI_Type_vector(2, 3, 5, MPI_INT, &vector_ddt);
     MPI_Type_commit(&vector_ddt);
 
+    MPI_Datatype pmpi_vector_ddt;
+    PMPI_Type_vector(2, 3, 5, MPI_INT, &pmpi_vector_ddt);
+    PMPI_Type_commit(&pmpi_vector_ddt);
+
     MPI_Request requests_mpi[2];
     MPI_Request requests_pmpi[2];
     MPI_Status statuses_mpi[2]; 
@@ -39,15 +43,15 @@ int main(int argc, char** argv) {
         MPI_Isend(mpi_inbuf, 2, vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_mpi[0]));
         MPI_Irecv(mpi_outbuf, 2, vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_mpi[1]));
 
-        PMPI_Isend(pmpi_inbuf, 2, vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_pmpi[0]));
-        PMPI_Irecv(pmpi_outbuf, 2, vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_pmpi[1]));       
+        PMPI_Isend(pmpi_inbuf, 2, pmpi_vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_pmpi[0]));
+        PMPI_Irecv(pmpi_outbuf, 2, pmpi_vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_pmpi[1]));       
     }
     else {
         MPI_Irecv(mpi_outbuf, 2, vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_mpi[0]));       
         MPI_Isend(mpi_inbuf, 2, vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_mpi[1]));
 
-        PMPI_Irecv(pmpi_outbuf, 2, vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_pmpi[0]));       
-        PMPI_Isend(pmpi_inbuf, 2, vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_pmpi[1]));
+        PMPI_Irecv(pmpi_outbuf, 2, pmpi_vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_pmpi[0]));       
+        PMPI_Isend(pmpi_inbuf, 2, pmpi_vector_ddt, peer, 0, MPI_COMM_WORLD, &(requests_pmpi[1]));
     }
 
     MPI_Wait(&(requests_mpi[0]),  &(statuses_mpi[0]));

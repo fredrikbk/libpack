@@ -48,22 +48,40 @@ static PrimitiveDatatype farc_char(PrimitiveDatatype::CHAR);
 static inline MPI_Datatype datatype_handle_create() {
     //TODO There seems to be a bug here - we have to check if there is actually an entry in the freelist left,
     //otherwise insert into g_types_fallback!
-    MPI_Datatype ddt = (MPI_Datatype)g_types_freelist.front();
-    g_types_freelist.pop();
-    return ddt;
+
+    if (! g_types_freelist.empty()) {
+        MPI_Datatype ddt = (MPI_Datatype)g_types_freelist.front();
+        g_types_freelist.pop();
+        return ddt;
+   }
+   else {
+        int nexttype = DDT_FAST_CACHE_SIZE + g_types_fallback.size();
+        g_types_fallback[nexttype] = NULL;
+        return ((MPI_Datatype) nexttype);
+   }
+
 }
 
 static inline void datatype_handle_free(MPI_Datatype* ddt_handle) {
-    g_types_freelist.push(*ddt_handle);
+
+    if (((int)*ddt_handle) < DDT_FAST_CACHE_SIZE) {
+        g_types_freelist.push(*ddt_handle);
+    }
+    else {
+        g_types_fallback.erase((int)*ddt_handle);
+    }
+
 }
 
 static inline void datatype_store(MPI_Datatype dt_handle, Datatype *dt) {
-    if ((int)dt_handle < 50) {
+
+    if ((int)dt_handle < DDT_FAST_CACHE_SIZE) {
         g_types[(int)dt_handle] = dt;
     }
     else {
         g_types_fallback[dt_handle] = dt;
     }
+
 }
 
 static inline Datatype* datatype_retrieve(MPI_Datatype dt_handle) {
@@ -86,8 +104,16 @@ static inline Datatype* datatype_retrieve(MPI_Datatype dt_handle) {
             break;
     }
 
-    return ((int)dt_handle < 50) ? g_types[(int)dt_handle]
-                                  : g_types_fallback[dt_handle];
+    Datatype* res = NULL;
+
+    if (((int)dt_handle) < DDT_FAST_CACHE_SIZE) {
+        res = g_types[(int)dt_handle];
+    }
+    else {
+        res = g_types_fallback[dt_handle];
+    }
+
+    return res;
 }
 
 void interposer_init() {
@@ -354,7 +380,6 @@ int MPI_Waitall(int count, MPI_Request *array_of_requests, MPI_Status *array_of_
 // TODO: MPI_Test and MPI_TestAll look buggy to me... How can we free buffers if
 //       we don't check whether the test passed?
 int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
-    printf("Whoaa!");
 
     int ret;
 
@@ -387,7 +412,6 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status) {
 }
 
 int MPI_Testall(int count, MPI_Request *array_of_requests, int *flag, MPI_Status *array_of_statuses) {
-    printf("Whoaa!");
 
     // we need to copy the old requests here :-( (they will become MPI_REQUEST_NULL)
     MPI_Request* oldrequests = (MPI_Request*) malloc(count * sizeof(MPI_Request));
@@ -482,7 +506,6 @@ extern "C" {
     }
 
     void interposer_buffer_free_(void* tmpbuf) {
-    printf("There\n");
         interposer_buffer_free(tmpbuf);
     }
 
