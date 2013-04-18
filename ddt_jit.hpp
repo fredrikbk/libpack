@@ -25,7 +25,14 @@ public:
     virtual Datatype* clone() = 0;
 
     virtual int getExtent() = 0;
+    virtual int getTrueExtent() = 0;
     virtual int getSize() = 0;
+    virtual int getLowerBound() = 0;
+    virtual int getTrueLowerBound() = 0;
+    virtual int getUpperBound() = 0;
+    virtual int getTrueUpperBound() = 0;
+
+
 	virtual std::string toString(bool summary = false) = 0;
     virtual void print(bool summary = false);
 
@@ -55,7 +62,13 @@ public:
     PrimitiveDatatype* clone();
 
     int getExtent();
+    int getTrueExtent();
     int getSize();
+    int getLowerBound();
+    int getTrueLowerBound();
+    int getUpperBound();
+    int getTrueUpperBound();
+
     std::string toString(bool summary = false);
 
     Datatype *compress();
@@ -64,9 +77,13 @@ public:
     void globalCodegen(llvm::Module *mod);
 
 private:
-    PrimitiveDatatype::PrimitiveType type;
-    int extent;
     int size;
+    int lower_bound;
+    int upper_bound;
+    int true_lower_bound;
+    int true_upper_bound;
+
+    PrimitiveDatatype::PrimitiveType type;
 };
 
 /* Class for contiguous types */
@@ -77,7 +94,13 @@ public:
     ContiguousDatatype* clone();
 
     int getExtent();
+    int getTrueExtent();
     int getSize();
+    int getLowerBound();
+    int getTrueLowerBound();
+    int getUpperBound();
+    int getTrueUpperBound();
+
     int getCount();
     Datatype *getBasetype();
     std::string toString(bool summary = false);
@@ -88,6 +111,12 @@ public:
     void globalCodegen(llvm::Module *mod);
 
 private:
+    int size;
+    int lower_bound;
+    int upper_bound;
+    int true_lower_bound;
+    int true_upper_bound;
+
     int count;
     Datatype* basetype;
 };
@@ -100,7 +129,13 @@ public:
     VectorDatatype* clone();
 
     int getExtent();
+    int getTrueExtent();
     int getSize();
+    int getLowerBound();
+    int getTrueLowerBound();
+    int getUpperBound();
+    int getTrueUpperBound();
+
     int getCount();
     int getBlocklen();
     int getStride();
@@ -113,6 +148,12 @@ public:
     void globalCodegen(llvm::Module *mod);
 
 private:
+    int size;
+    int lower_bound;
+    int upper_bound;
+    int true_lower_bound;
+    int true_upper_bound;
+
     int count;
     int blocklen;
     int stride;
@@ -127,7 +168,13 @@ public:
     HVectorDatatype* clone();
 
     int getExtent();
+    int getTrueExtent();
     int getSize();
+    int getLowerBound();
+    int getTrueLowerBound();
+    int getUpperBound();
+    int getTrueUpperBound();
+
     int getCount();
     int getBlocklen();
     int getStride();
@@ -140,6 +187,12 @@ public:
     void globalCodegen(llvm::Module *mod);
 
 private:
+    int size;
+    int lower_bound;
+    int upper_bound;
+    int true_lower_bound;
+    int true_upper_bound;
+
     int count;
     int blocklen;
     int stride;
@@ -154,7 +207,13 @@ public:
     IndexedBlockDatatype* clone();
 
     int getExtent();
+    int getTrueExtent();
     int getSize();
+    int getLowerBound();
+    int getTrueLowerBound();
+    int getUpperBound();
+    int getTrueUpperBound();
+
     std::string toString(bool summary = false);
 
     Datatype *compress();
@@ -163,6 +222,12 @@ public:
     void globalCodegen(llvm::Module *mod);
 
 private:
+    int size;
+    int lower_bound;
+    int upper_bound;
+    int true_lower_bound;
+    int true_upper_bound;
+
     int count;
     int blocklen;
     std::vector<int> displs;
@@ -182,7 +247,13 @@ public:
     HIndexedDatatype* clone();
 
     int getExtent();
+    int getTrueExtent();
     int getSize();
+    int getLowerBound();
+    int getTrueLowerBound();
+    int getUpperBound();
+    int getTrueUpperBound();
+
     std::string toString(bool summary = false);
 
     Datatype *compress();
@@ -191,6 +262,12 @@ public:
     void globalCodegen(llvm::Module *mod);
 
 private:
+    int size;
+    int lower_bound;
+    int upper_bound;
+    int true_lower_bound;
+    int true_upper_bound;
+
     int count;
     std::vector<int> blocklens;
     std::vector<long> displs;
@@ -205,7 +282,13 @@ public:
     StructDatatype* clone();
 
     int getExtent();
+    int getTrueExtent();
     int getSize();
+    int getLowerBound();
+    int getTrueLowerBound();
+    int getUpperBound();
+    int getTrueUpperBound();
+
     std::string toString(bool summary = false);
 
     Datatype *compress();
@@ -214,6 +297,12 @@ public:
     void globalCodegen(llvm::Module *mod);
 
 private:
+    int size;
+    int lower_bound;
+    int upper_bound;
+    int true_lower_bound;
+    int true_upper_bound;
+
     int count;
     std::vector<int> blocklens;
     std::vector<long> displs;

@@ -72,7 +72,6 @@ Datatype::~Datatype() {
     cleanup();
 }
 
-
 static inline Function* createFunctionHeader(const char *name) {
     Function* F = Function::Create(FT, Function::ExternalLinkage, name, module);
     F->setDoesNotThrow();
@@ -188,16 +187,22 @@ void Datatype::print(bool summary) {
 
 /* PrimitiveDatatype */
 PrimitiveDatatype::PrimitiveDatatype(PrimitiveDatatype::PrimitiveType type) : Datatype() {
+
     this->type = type;
 
-    if (type == BYTE)   this->extent = 1;
-    if (type == CHAR)   this->extent = 1;
-    if (type == DOUBLE) this->extent = sizeof(double);
-    if (type == FLOAT)  this->extent = sizeof(float);
-    if (type == INT)    this->extent = sizeof(int);
+    if (type == BYTE)   this->size = 1;
+    if (type == CHAR)   this->size = 1;
+    if (type == DOUBLE) this->size = sizeof(double);
+    if (type == FLOAT)  this->size = sizeof(float);
+    if (type == INT)    this->size = sizeof(int);
     //TODO add more. Remember to also add them to the print function.
 
-    this->size = this->extent;
+    this->true_lower_bound = 0;
+    this->true_upper_bound = this->size;
+
+    this->lower_bound = this->true_lower_bound;
+    this->upper_bound = this->true_upper_bound;
+
 }
 
 PrimitiveDatatype* PrimitiveDatatype::clone() {
@@ -223,7 +228,27 @@ void PrimitiveDatatype::globalCodegen(llvm::Module *module) {
 };
 
 int PrimitiveDatatype::getExtent() {
-    return this->extent;
+    return this->upper_bound - this->lower_bound;
+}
+
+int PrimitiveDatatype::getTrueExtent() {
+    return this->true_upper_bound - this->true_lower_bound;
+}
+
+int PrimitiveDatatype::getLowerBound() {
+    return this->lower_bound;
+}
+
+int PrimitiveDatatype::getTrueLowerBound() {
+    return this->true_lower_bound;
+}
+
+int PrimitiveDatatype::getUpperBound() {
+    return this->upper_bound;
+}
+
+int PrimitiveDatatype::getTrueUpperBound() {
+    return this->true_upper_bound;
 }
 
 int PrimitiveDatatype::getSize() {
@@ -258,8 +283,18 @@ string PrimitiveDatatype::toString(bool summary) {
 
 /* Class ContiguousDatatype */
 ContiguousDatatype::ContiguousDatatype(int count, Datatype* basetype) {
+        
     this->basetype = basetype->clone();
     this->count = count;
+
+    this->lower_bound = basetype->getLowerBound();
+    this->true_lower_bound = basetype->getTrueLowerBound();
+    int basetype_ub = basetype->getLowerBound() + basetype->getExtent();
+    this->upper_bound = basetype_ub + basetype->getExtent() * (count - 1);
+    this->true_upper_bound = basetype->getTrueUpperBound() + basetype->getExtent() * (count - 1);
+
+    this->size = this->count * this->basetype->getSize();
+
 }
 
 ContiguousDatatype::~ContiguousDatatype(void) {
@@ -283,6 +318,7 @@ void ContiguousDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outb
 }
 
 Datatype *ContiguousDatatype::compress() {
+
     Datatype *cbasetype = this->basetype->compress();
     Datatype *datatype;
 
@@ -308,11 +344,31 @@ void ContiguousDatatype::globalCodegen(llvm::Module *mod) {
 };
 
 int ContiguousDatatype::getExtent() {
-    return this->count * this->basetype->getExtent();
+    return this->upper_bound - this->lower_bound;
+}
+
+int ContiguousDatatype::getTrueExtent() {
+    return this->true_upper_bound - this->true_lower_bound;
 }
 
 int ContiguousDatatype::getSize() {
-    return this->count * this->basetype->getSize();
+    return this->size;
+}
+
+int ContiguousDatatype::getLowerBound() {
+    return this->lower_bound;
+}
+
+int ContiguousDatatype::getTrueLowerBound() {
+    return this->true_lower_bound;
+}
+
+int ContiguousDatatype::getUpperBound() {
+    return this->upper_bound;
+}
+
+int ContiguousDatatype::getTrueUpperBound() {
+    return this->true_upper_bound;
 }
 
 int ContiguousDatatype::getCount() {
@@ -332,10 +388,28 @@ string ContiguousDatatype::toString(bool summary) {
 
 /* Class VectorDatatype */
 VectorDatatype::VectorDatatype(int count, int blocklen, int stride, Datatype* basetype) {
+
     this->count = count;
     this->blocklen = blocklen;
     this->stride = stride;
     this->basetype = basetype->clone();
+
+    //TODO how does the typemap look if  blocklen > stride?
+    if (stride > 0) {
+        this->lower_bound = basetype->getLowerBound();
+        this->true_lower_bound = basetype->getTrueLowerBound();
+        this->upper_bound = basetype->getUpperBound() + (stride * (count-1) + blocklen-1) * basetype->getExtent();
+        this->true_upper_bound = basetype->getTrueUpperBound() + (stride * (count-1) + blocklen-1) * basetype->getExtent();
+    }
+    else {
+        this->lower_bound = basetype->getUpperBound() + (stride * (count-1) + blocklen-1) * basetype->getExtent();
+        this->true_lower_bound = basetype->getUpperBound() + (stride * (count-1) + blocklen-1) * basetype->getExtent();
+        this->upper_bound = blocklen * basetype->getExtent();
+        this->true_upper_bound = blocklen * basetype->getTrueExtent();
+    }
+    
+    this->size = count * blocklen * this->basetype->getSize();
+
 }
 
 VectorDatatype::~VectorDatatype(void) {
@@ -399,12 +473,31 @@ void VectorDatatype::globalCodegen(llvm::Module *mod) {
 };
 
 int VectorDatatype::getExtent() {
-    return (this->count - 1) * this->basetype->getExtent() *
-        this->stride + this->blocklen * this->basetype->getExtent();
+    return this->upper_bound - this->lower_bound;
+}
+
+int VectorDatatype::getTrueExtent() {
+    return this->true_upper_bound - this->true_lower_bound;
 }
 
 int VectorDatatype::getSize() {
-    return this->count * this->blocklen*this->basetype->getSize();
+    return this->size;
+}
+
+int VectorDatatype::getLowerBound() {
+    return this->lower_bound;
+}
+
+int VectorDatatype::getTrueLowerBound() {
+    return this->lower_bound;
+}
+
+int VectorDatatype::getUpperBound() {
+    return this->upper_bound;
+}
+
+int VectorDatatype::getTrueUpperBound() {
+    return this->true_upper_bound;
 }
 
 int VectorDatatype::getCount() {
@@ -434,10 +527,34 @@ string VectorDatatype::toString(bool summary) {
 
 /* Class HVectorDatatype */
 HVectorDatatype::HVectorDatatype(int count, int blocklen, int stride, Datatype* basetype) {
+
     this->count = count;
     this->blocklen = blocklen;
     this->stride = stride;
     this->basetype = basetype->clone();
+
+    //TODO how does the typemap look if blocklen > stride or stride == 0?
+    if (stride > 0) {
+        this->lower_bound = basetype->getLowerBound();
+        this->true_lower_bound = basetype->getTrueLowerBound();
+        this->upper_bound = basetype->getUpperBound() + stride * (count-1) + (blocklen-1) * basetype->getExtent();
+        this->true_upper_bound = basetype->getTrueUpperBound() + stride * (count-1) + (blocklen-1) * basetype->getExtent();
+    }
+    else {
+        this->lower_bound = basetype->getUpperBound() + (stride * (count-1) + blocklen-1) * basetype->getExtent();
+        this->true_lower_bound = basetype->getUpperBound() + stride * (count-1) + (blocklen-1) * basetype->getExtent();
+        this->upper_bound = blocklen * basetype->getExtent();
+        this->true_upper_bound = blocklen * basetype->getTrueExtent();
+    }
+
+    if (count == 0) {
+        this->lower_bound = 0;
+        this->upper_bound = 0;
+        this->true_lower_bound = 0;
+        this->true_upper_bound = 0;
+    }
+
+    this->size = this->count * this->blocklen*this->basetype->getSize();
 } 
 
 HVectorDatatype* HVectorDatatype::clone() {
@@ -495,16 +612,42 @@ Datatype *HVectorDatatype::compress() {
 
 void HVectorDatatype::globalCodegen(llvm::Module *mod) {
     basetype->globalCodegen(mod);
-};
+}
 
+int HVectorDatatype::getExtent() {
+    return this->upper_bound - this->lower_bound;
+}
+
+int HVectorDatatype::getTrueExtent() {
+    return this->true_upper_bound - this->true_lower_bound;
+}
+
+int HVectorDatatype::getSize() {
+    return this->size;
+}
+
+int HVectorDatatype::getLowerBound() {
+    return this->lower_bound;
+}
+
+int HVectorDatatype::getTrueLowerBound() {
+    return this->lower_bound;
+}
+
+int HVectorDatatype::getUpperBound() {
+    return this->upper_bound;
+}
+
+int HVectorDatatype::getTrueUpperBound() {
+    return this->true_upper_bound;
+}
+
+/*
 int HVectorDatatype::getExtent() {
     if (this->stride > 0) return (this->count-1)*this->stride + this->blocklen*this->basetype->getExtent();
     else return (-((this->count-1)*this->stride + this->blocklen*this->basetype->getExtent()) + this->count*this->blocklen*this->basetype->getExtent());
 }
-
-int HVectorDatatype::getSize() {
-    return this->count * this->blocklen*this->basetype->getSize();
-}
+*/
 
 int HVectorDatatype::getCount() {
     return count;
@@ -532,11 +675,40 @@ string HVectorDatatype::toString(bool summary) {
 
 /* Class IndexedBlockDatatype */
 IndexedBlockDatatype::IndexedBlockDatatype(int count, int blocklen, int* displ, Datatype* basetype) : Datatype() {
+
     this->count = count;
     this->basetype = basetype->clone();
     this->blocklen = blocklen;
-    for (int i=0; i<count; i++) this->displs.push_back(displ[i]);
+    this->lower_bound = 0;
+    this->true_lower_bound = 0;
+    this->upper_bound = 0;
+    this->true_upper_bound = 0;
+    this->size = basetype->getSize() * count;
+
+    if (count > 0) {
+        // initialize lb and ub to real values
+        this->lower_bound = displ[0];
+        this->upper_bound = displ[0] + blocklen * basetype->getExtent(); 
+    }
+
+    for (int i=0; i<count; i++) {
+        this->displs.push_back(displ[i]);
+        int tmp_ub = (displ[i] + blocklen) * this->basetype->getExtent();
+        int tmp_lb = displ[i] * this->basetype->getExtent();
+        if (tmp_ub > this->upper_bound) {
+            this->upper_bound = tmp_ub;
+        }
+        if (tmp_lb < this->lower_bound) {
+            this->lower_bound = tmp_lb;
+        }
+    }
+
+    //FIXME this could be different
+    this->true_upper_bound = this->upper_bound;
+    this->true_lower_bound = this->lower_bound;
+
     indices_arr = NULL;
+
 }
 
 IndexedBlockDatatype::~IndexedBlockDatatype(void) {
@@ -588,31 +760,31 @@ void IndexedBlockDatatype::globalCodegen(llvm::Module *mod) {
 }
 
 int IndexedBlockDatatype::getExtent() {
-    if (this->count == 0) return 0;
+    return this->upper_bound - this->lower_bound;
+}
 
-    int bext = this->basetype->getExtent();
-
-    int ub = this->displs[0] * bext + this->blocklen * bext;
-    int lb = this->displs[0] * bext;
-
-    for (int i=0; i<this->count; i++) {
-        int tmp_ub = this->displs[i] * bext + this->blocklen * bext;
-        int tmp_lb = this->displs[i] * bext;
-        if (tmp_ub > ub) ub = tmp_ub;
-        if (tmp_lb < lb) lb = tmp_lb;
-    }
-
-    return ub - lb;
+int IndexedBlockDatatype::getTrueExtent() {
+    return this->true_upper_bound - this->true_lower_bound;
 }
 
 int IndexedBlockDatatype::getSize() {
-    int sum = 0;
-    int bsize = this->basetype->getSize();
-    for (int i=0; i<this->count; i++) {
-        sum += bsize * this->blocklen;
-    }
+    return this->size;
+}
 
-    return sum;
+int IndexedBlockDatatype::getLowerBound() {
+    return this->lower_bound;
+}
+
+int IndexedBlockDatatype::getTrueLowerBound() {
+    return this->lower_bound;
+}
+
+int IndexedBlockDatatype::getUpperBound() {
+    return this->upper_bound;
+}
+
+int IndexedBlockDatatype::getTrueUpperBound() {
+    return this->true_upper_bound;
 }
 
 string IndexedBlockDatatype::toString(bool summary) {
@@ -637,10 +809,43 @@ string IndexedBlockDatatype::toString(bool summary) {
 
 /* Class HIndexedDatatype */
 HIndexedDatatype::HIndexedDatatype(int count, int* blocklen, long* displ, Datatype* basetype) : Datatype() {
+
     this->count = count;
     this->basetype = basetype->clone();
-    for (int i=0; i<count; i++) this->blocklens.push_back(blocklen[i]);
-    for (int i=0; i<count; i++) this->displs.push_back(displ[i]);
+    this->size = 0;
+    this->lower_bound = 0;
+    this->true_lower_bound = 0;
+    this->upper_bound = 0;
+    this->true_upper_bound = 0;
+
+    if (count > 0) {
+        // initialize lb and ub to real values
+        this->lower_bound = displ[0];
+        this->upper_bound = displ[0] + blocklen[0] * basetype->getExtent(); 
+    }
+
+    for (int i=0; i<count; i++) {
+        this->blocklens.push_back(blocklen[i]);
+        this->displs.push_back(displ[i]);
+
+        this->size += basetype->getSize() * blocklen[i];
+
+        int tmp_ub = displs[i] + blocklen[i] * basetype->getExtent();
+        int tmp_lb = displs[i];
+        if (tmp_ub > this->upper_bound) {
+            this->upper_bound = tmp_ub;
+        }
+        if (tmp_lb < this->lower_bound) {
+            this->lower_bound = tmp_lb;
+        }
+    }
+
+    //FIXME this could be different
+    this->true_upper_bound = this->upper_bound;
+    this->true_lower_bound = this->lower_bound;
+
+
+
 }
 
 HIndexedDatatype::~HIndexedDatatype(void) {
@@ -673,30 +878,31 @@ void HIndexedDatatype::globalCodegen(llvm::Module *mod) {
 };
 
 int HIndexedDatatype::getExtent() {
-    if (this->count == 0) return 0;
+    return this->upper_bound - this->lower_bound;
+}
 
-    int bext = this->basetype->getExtent();
-    int ub = this->displs[0] + bext * this->blocklens[0];
-    int lb = this->displs[0];
-
-    for (int i=0; i<this->count; i++) {
-        int tmp_ub = this->displs[i] + bext * this->blocklens[i];
-        int tmp_lb = this->displs[i];
-        if (tmp_ub > ub) ub = tmp_ub;
-        if (tmp_lb < lb) lb = tmp_lb;
-    }
-
-    return ub - lb;
+int HIndexedDatatype::getTrueExtent() {
+    return this->true_upper_bound - this->true_lower_bound;
 }
 
 int HIndexedDatatype::getSize() {
-    int sum = 0;
-    int bsize = this->basetype->getSize();
-    for (int i=0; i<this->count; i++) {
-        sum += bsize * this->blocklens[i];
-    }
+    return this->size;
+}
 
-    return sum;
+int HIndexedDatatype::getLowerBound() {
+    return this->lower_bound;
+}
+
+int HIndexedDatatype::getTrueLowerBound() {
+    return this->lower_bound;
+}
+
+int HIndexedDatatype::getUpperBound() {
+    return this->upper_bound;
+}
+
+int HIndexedDatatype::getTrueUpperBound() {
+    return this->true_upper_bound;
 }
 
 string HIndexedDatatype::toString(bool summary) {
@@ -717,10 +923,38 @@ string HIndexedDatatype::toString(bool summary) {
 /* Class StructDatatype */
 StructDatatype::StructDatatype(int count, int* blocklen, long*  displ,
                                Datatype** types) : Datatype() {
-    this->count = count;
     for (int i=0; i<count; i++) blocklens.push_back(blocklen[i]);
     for (int i=0; i<count; i++) displs.push_back(displ[i]);
     for (int i=0; i<count; i++) basetypes.push_back(types[i]->clone());
+
+    this->count = count;
+    this->size = 0;
+    this->lower_bound = 0;
+    this->true_lower_bound = 0;
+    this->upper_bound = 0;
+    this->true_upper_bound = 0;
+
+    for (int i=0; i<count; i++) {
+        this->blocklens.push_back(blocklen[i]);
+        this->displs.push_back(displ[i]);
+        this->basetypes.push_back(types[i]->clone());
+
+        this->size += types[i]->getSize() * blocklen[i];
+
+        int tmp_ub = displs[i] + blocklen[i] * types[i]->getExtent();
+        int tmp_lb = displs[i];
+        if (tmp_ub > this->upper_bound) {
+            this->upper_bound = tmp_ub;
+        }
+        if (tmp_lb < this->lower_bound) {
+            this->lower_bound = tmp_lb;
+        }
+    }
+
+    //FIXME this could be different
+    this->true_upper_bound = this->upper_bound;
+    this->true_lower_bound = this->lower_bound;
+
 }
 
 StructDatatype::~StructDatatype(void) {
@@ -755,30 +989,34 @@ void StructDatatype::globalCodegen(llvm::Module *mod) {
     for (unsigned int i=0 ; i<this->basetypes.size(); i++) {
         basetypes[i]->globalCodegen(mod);
     }
-};
+}
 
 int StructDatatype::getExtent() {
-    if (this->count == 0) return 0;
+    return this->upper_bound - this->lower_bound;
+}
 
-    int lb = this->displs[0];
-    int ub = this->displs[0] + this->basetypes[0]->getExtent() * this->blocklens[0];
-    for (int i=0; i<this->count; i++) {
-        int tmp_ub = this->displs[i] + this->basetypes[i]->getExtent() * this->blocklens[i];
-        int tmp_lb = this->displs[i];
-        if (tmp_ub > ub) ub = tmp_ub;
-        if (tmp_lb < lb) lb = tmp_lb;
-    }
-
-    return ub-lb;
+int StructDatatype::getTrueExtent() {
+    return this->true_upper_bound - this->true_lower_bound;
 }
 
 int StructDatatype::getSize() {
-    int sum = 0;
-    for (int i=0; i<this->count; i++) {
-        sum += this->basetypes[i]->getSize() * this->blocklens[i];
-    }
+    return this->size;
+}
 
-    return sum;
+int StructDatatype::getLowerBound() {
+    return this->lower_bound;
+}
+
+int StructDatatype::getTrueLowerBound() {
+    return this->lower_bound;
+}
+
+int StructDatatype::getUpperBound() {
+    return this->upper_bound;
+}
+
+int StructDatatype::getTrueUpperBound() {
+    return this->true_upper_bound;
 }
 
 string StructDatatype::toString(bool summary) {
