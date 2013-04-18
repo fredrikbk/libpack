@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include "../ddt_jit.hpp"
 
 void init_buffers(size_t size, char** mpi_inbuf, char** farc_inbuf, char** mpi_outbuf, char** farc_outbuf) {
 
@@ -119,6 +120,38 @@ void free_buffers(char** mpi_inbuf, char** farc_inbuf, char** mpi_outbuf, char**
     free(*farc_outbuf);
 
 }
+
+int compare_ddt_info(MPI_Datatype mpitype, farc::Datatype* farctype) {
+
+    MPI_Aint mpi_lb, mpi_extent;
+    int farc_lb, farc_extent;
+
+    MPI_Type_get_extent(mpitype, &mpi_lb, &mpi_extent);
+    farc_lb = farctype->getLowerBound();
+    farc_extent = farctype->getExtent();
+
+    if ((farc_lb != mpi_lb) || (farc_extent != mpi_extent)) {
+        return -1;
+    }
+
+    return 0;
+
+}
+
+void inspect_ddt_info(MPI_Datatype mpitype, farc::Datatype* farctype) {
+
+    MPI_Aint mpi_lb, mpi_extent;
+    int farc_lb, farc_extent;
+
+    MPI_Type_get_extent(mpitype, &mpi_lb, &mpi_extent);
+    farc_lb = farctype->getLowerBound();
+    farc_extent = farctype->getExtent();
+
+    printf("mpi extent: %i mpi lb: %i farc extent: %i farc lb: %i\n", 
+                    mpi_extent, mpi_lb, farc_extent, farc_lb);
+
+}
+
 
 #endif
 
