@@ -1,3 +1,6 @@
+export MPICH_CC:= clang
+export MPICH_CXX:= clang++
+
 CXX=mpic++
 F77=mpif77
 
@@ -42,4 +45,4 @@ clean:
 	rm -f *.o *.a
 	make -C tests clean
 	make -C pmpi-tests clean
-	svn status
+	git status
