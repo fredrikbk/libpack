@@ -26,9 +26,13 @@ int main(int argc, char** argv) {
     MPI_Datatype new_contig;
     MPI_Type_contiguous(8, MPI_INT, &new_contig);
     MPI_Type_commit(&new_contig);
+
+
+    int res = compare_ddt_info(new_contig, t2);
+
     MPI_Pack(mpi_inbuf, 2, new_contig, mpi_outbuf, 20*sizeof(int), &position, MPI_COMM_WORLD);
 
-    int res = compare_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+    res += compare_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
     
     free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
     test_result(res);

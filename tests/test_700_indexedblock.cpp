@@ -32,7 +32,8 @@ int main(int argc, char** argv) {
     int position = 0;
     MPI_Pack(mpi_inbuf, 2, mpitype, mpi_outbuf, 20*sizeof(int), &position, MPI_COMM_WORLD);
 
-    int res = compare_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+    int res = compare_ddt_info(mpitype, t2);
+    res += compare_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
     free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
     test_result(res);
