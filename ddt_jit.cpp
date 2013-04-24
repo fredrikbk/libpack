@@ -323,13 +323,13 @@ ContiguousDatatype* ContiguousDatatype::clone() {
 
 void ContiguousDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenContiguous(inbuf, incount, outbuf, this->basetype, 
-                      this->basetype->getExtent(), this->basetype->getSize(), 
+                      this->getExtent(), this->getSize(), 
                       this->count, true);
 }
 
 void ContiguousDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenContiguous(inbuf, incount, outbuf, this->basetype, 
-                      this->basetype->getSize(), this->basetype->getExtent(), 
+                      this->getSize(), this->getExtent(), 
                       this->count, false);
 }
 
@@ -1131,12 +1131,33 @@ void ResizedDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
 
     if (basetype->getDatatypeName() == PRIMITIVE) {
         codegenPrimitiveResized(inbuf, incount, outbuf, 
-            this->size, 
-            this->upper_bound - this->lower_bound, 
-            PrimitiveDatatype::BYTE);
+                                this->size, this->getExtent(), 
+                                PrimitiveDatatype::BYTE);
     }
-    else {
-        fprintf(stderr, "Wah, this is unimplemented.\n");
+    else if (basetype->getDatatypeName() == CONTIGUOUS) {
+        Datatype* cont_basetype = this->basetype->getSubtypes().at(0);
+        codegenContiguous(inbuf, incount, outbuf, cont_basetype, 
+                          this->getExtent(), this->getSize(), 
+                          ((ContiguousDatatype*) this->basetype)->getCount(),
+                          true);
+    }
+    else if (basetype->getDatatypeName() == VECTOR) {
+    
+    }
+    else if (basetype->getDatatypeName() == HVECTOR) {
+
+    }
+    else if (basetype->getDatatypeName() == INDEXEDBLOCK) {
+    
+    }
+    else if (basetype->getDatatypeName() == HINDEXED) {
+
+    }
+    else if (basetype->getDatatypeName() == STRUCT) {
+    
+    }
+    else if (basetype->getDatatypeName() == RESIZED) {
+
     }
 
 }
@@ -1145,12 +1166,33 @@ void ResizedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf)
 
     if (basetype->getDatatypeName() == PRIMITIVE) {
         codegenPrimitiveResized(inbuf, incount, outbuf, 
-            this->size, 
-            this->upper_bound - this->lower_bound, 
-            PrimitiveDatatype::BYTE);
+                                this->size, this->getExtent(), 
+                                PrimitiveDatatype::BYTE);
     }
-    else {
-        fprintf(stderr, "Wah, this is unimplemented.\n");
+    else if (basetype->getDatatypeName() == CONTIGUOUS) {
+        Datatype* cont_basetype = this->basetype->getSubtypes().at(0);
+        codegenContiguous(inbuf, incount, outbuf, cont_basetype, 
+                          this->getExtent(), this->getSize(), 
+                          ((ContiguousDatatype*) this->basetype)->getCount(),
+                          true);
+    }
+    else if (basetype->getDatatypeName() == VECTOR) {
+    
+    }
+    else if (basetype->getDatatypeName() == HVECTOR) {
+
+    }
+    else if (basetype->getDatatypeName() == INDEXEDBLOCK) {
+    
+    }
+    else if (basetype->getDatatypeName() == HINDEXED) {
+
+    }
+    else if (basetype->getDatatypeName() == STRUCT) {
+    
+    }
+    else if (basetype->getDatatypeName() == RESIZED) {
+
     }
 
 }

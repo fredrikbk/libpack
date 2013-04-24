@@ -8,6 +8,7 @@
 #include "codegen.hpp"
 #include "codegen_common.hpp"
 #include "ddt_jit.hpp"
+#include <stdio.h>
 
 #include <llvm/IR/Value.h>
 
@@ -17,7 +18,7 @@ namespace farc {
 
 void codegenContiguous(Value* inbuf, Value* incount,
                        Value* outbuf, Datatype *basetype,
-                       int elemstride_in, int elemstride_out,
+                       int inptr_inc, int outptr_inc,
                        int count, bool pack) {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
 
@@ -42,14 +43,14 @@ void codegenContiguous(Value* inbuf, Value* incount,
     else      basetype->unpackCodegen(in, constNode(count), out);
 
 
-    // Increment the out ptr by Size(Basetype) * Blocklen
-    Value* out_bytes_to_stride = constNode((long) elemstride_out * count);
+    // Increment the out ptr by outptr_inc
+    Value* out_bytes_to_stride = constNode((long) outptr_inc);
     Value* out_addr_cvi = Builder.CreatePtrToInt(out, LLVM_INT64);
     Value* out_addr = Builder.CreateAdd(out_addr_cvi, out_bytes_to_stride);
     Value* nextout = Builder.CreateIntToPtr(out_addr, LLVM_INT8PTR);
 
-    // Increment the in ptr by Extent(Basetype) * Stride
-    Value* in_bytes_to_stride = constNode((long)elemstride_in * count);
+    // Increment the in ptr by inptr_inc
+    Value* in_bytes_to_stride = constNode((long) inptr_inc);
     Value* in_addr_cvi = Builder.CreatePtrToInt(in, LLVM_INT64);
     Value* in_addr = Builder.CreateAdd(in_addr_cvi, in_bytes_to_stride);
     Value* nextin = Builder.CreateIntToPtr(in_addr, LLVM_INT8PTR);

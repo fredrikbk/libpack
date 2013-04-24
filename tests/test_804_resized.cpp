@@ -20,24 +20,30 @@ int main(int argc, char** argv) {
 
     MPI_Init(&argc, &argv);
 
-    test_start("unpack(2, contiguous[[int], count=8])");
+    test_start("pack(2, resized(lb=0, extent=2, [ctg(2)[MPI_INT]]))");
     init_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
 
     farc::DDT_Init();
     farc::Datatype* t1 = new farc::PrimitiveDatatype(farc::PrimitiveDatatype::INT);
-    farc::Datatype* t2 = new farc::ContiguousDatatype(8, t1);
-    farc::DDT_Commit(t2);
-    farc::DDT_Unpack(farc_inbuf, farc_outbuf, t2, 2);
+    farc::Datatype* t2 = new farc::ContiguousDatatype(2, t1);
+    farc::Datatype* t3 = new farc::ResizedDatatype(t2, 0, 2);
+
+
+    farc::DDT_Commit(t3);
+    farc::DDT_Pack(farc_inbuf, farc_outbuf, t3, 2);
 
     int position = 0;
-    MPI_Datatype new_contig;
-    MPI_Type_contiguous(8, MPI_INT, &new_contig);
-    MPI_Type_commit(&new_contig);
-    MPI_Unpack(mpi_inbuf, 20*sizeof(int), &position, mpi_outbuf, 2, new_contig, MPI_COMM_WORLD);
-
-    int res = compare_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
-    // inspect_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+    MPI_Datatype mpiresized, mpicont;
+    MPI_Type_contiguous(2, MPI_INT, &mpicont);
+    MPI_Type_create_resized(mpicont, 0, 2, &mpiresized);
+    MPI_Type_commit(&mpiresized);
     
+    int res = compare_ddt_info(mpiresized, t3);
+    
+    MPI_Pack(mpi_inbuf, 2, mpiresized, mpi_outbuf, 20*sizeof(int), &position, MPI_COMM_WORLD);
+
+    res += compare_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
+    // inspect_buffers(20*sizeof(int), &mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
     free_buffers(&mpi_inbuf, &farc_inbuf, &mpi_outbuf, &farc_outbuf);
     test_result(res);
 
