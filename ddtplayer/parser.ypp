@@ -72,10 +72,10 @@ Datatypes *createVecs(int count_start, int count_stop, int count_stride,
 
 %token <val> NUM
 %token <sym> UNKNOWN SUBTYPE ELEM
-%token <sym> CONTIGUOUS VECTOR HVECTOR HINDEXED INDEXEDBLOCK STRUCT
+%token <sym> CONTIGUOUS VECTOR HVECTOR HINDEXED INDEXEDBLOCK STRUCT RESIZED
 %token <sym> BYTE_ CHAR_ INT_ DOUBLE_ FLOAT_
 
-%type <types>   datatype primitive derived contiguous vector hvector hindexed indexedblock
+%type <types>   datatype primitive derived contiguous vector hvector hindexed indexedblock resized
 %type <indices> idxentries leftidxentry idxbentries leftidxbentry
 %type <index>   idxentry idxbentry
 %type <range>   range
@@ -145,6 +145,7 @@ contiguous
 | hvector
 | indexedblock
 | hindexed
+| resized
 ;
 
 range:
@@ -327,6 +328,31 @@ HINDEXED '(' idxentries ')' '[' datatype ']' {
 	free($6);
 }
 ;
+
+resized:
+RESIZED '(' NUM ',' NUM ')' '[' datatype ']' {
+	$$ = new Datatypes;
+
+	list<struct Datatype> *subtypes = &($8->types);
+	list<struct Datatype> *types = &($$->types);
+
+	for(list<struct Datatype>::iterator subtype = subtypes->begin();
+		subtype != subtypes->end(); subtype++) {
+
+		int lb = $3;
+		int extent = $5;
+
+		Datatype type;
+		type.farc = new farc::ResizedDatatype(subtype->farc, lb, extent);
+		MPI_Type_create_resized(subtype->mpi, lb, extent, &(type.mpi));
+		types->push_back(type);
+		
+	}
+
+	free($8);
+}
+;
+
 
 %%
 
