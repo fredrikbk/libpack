@@ -234,6 +234,10 @@ void PrimitiveDatatype::globalCodegen(llvm::Module *module) {
 
 };
 
+DatatypeName PrimitiveDatatype::getDatatypeName() {
+    return PRIMITIVE;
+}
+
 int PrimitiveDatatype::getExtent() {
     return this->upper_bound - this->lower_bound;
 }
@@ -349,6 +353,10 @@ Datatype *ContiguousDatatype::compress() {
 void ContiguousDatatype::globalCodegen(llvm::Module *mod) {
     basetype->globalCodegen(mod);
 };
+
+DatatypeName ContiguousDatatype::getDatatypeName() {
+    return CONTIGUOUS;
+}
 
 int ContiguousDatatype::getExtent() {
     return this->upper_bound - this->lower_bound;
@@ -478,6 +486,10 @@ Datatype *VectorDatatype::compress() {
 void VectorDatatype::globalCodegen(llvm::Module *mod) {
     basetype->globalCodegen(mod);
 };
+
+DatatypeName VectorDatatype::getDatatypeName() {
+    return VECTOR;
+}
 
 int VectorDatatype::getExtent() {
     return this->upper_bound - this->lower_bound;
@@ -619,6 +631,10 @@ Datatype *HVectorDatatype::compress() {
 
 void HVectorDatatype::globalCodegen(llvm::Module *mod) {
     basetype->globalCodegen(mod);
+}
+
+DatatypeName HVectorDatatype::getDatatypeName() {
+    return HVECTOR;
 }
 
 int HVectorDatatype::getExtent() {
@@ -766,6 +782,10 @@ void IndexedBlockDatatype::globalCodegen(llvm::Module *mod) {
     basetype->globalCodegen(mod);
 }
 
+DatatypeName IndexedBlockDatatype::getDatatypeName() {
+    return INDEXEDBLOCK;
+}
+
 int IndexedBlockDatatype::getExtent() {
     return this->upper_bound - this->lower_bound;
 }
@@ -884,6 +904,10 @@ void HIndexedDatatype::globalCodegen(llvm::Module *mod) {
     basetype->globalCodegen(mod);
 };
 
+DatatypeName HIndexedDatatype::getDatatypeName() {
+    return HINDEXED;
+}
+
 int HIndexedDatatype::getExtent() {
     return this->upper_bound - this->lower_bound;
 }
@@ -996,6 +1020,10 @@ void StructDatatype::globalCodegen(llvm::Module *mod) {
     for (unsigned int i=0 ; i<this->basetypes.size(); i++) {
         basetypes[i]->globalCodegen(mod);
     }
+}
+
+DatatypeName StructDatatype::getDatatypeName() {
+    return STRUCT;
 }
 
 int StructDatatype::getExtent() {

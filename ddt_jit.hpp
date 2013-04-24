@@ -22,6 +22,8 @@ class GlobalVariable;
 
 namespace farc {
 
+enum DatatypeName {PRIMITIVE, CONTIGUOUS, VECTOR, HVECTOR, INDEXEDBLOCK, HINDEXED, STRUCT, RESIZED};
+
 /* Base class for all datatypes */
 class Datatype {
 public:
@@ -38,6 +40,7 @@ public:
     virtual int getTrueLowerBound() = 0;
     virtual int getUpperBound() = 0;
     virtual int getTrueUpperBound() = 0;
+    virtual DatatypeName getDatatypeName() = 0;
 
 
 	virtual std::string toString(bool summary = false) = 0;
@@ -68,6 +71,7 @@ public:
     virtual ~PrimitiveDatatype(void) {};
     PrimitiveDatatype* clone();
 
+    DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
     int getSize();
@@ -100,6 +104,7 @@ public:
     virtual ~ContiguousDatatype(void);
     ContiguousDatatype* clone();
 
+    DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
     int getSize();
@@ -135,6 +140,7 @@ public:
     virtual ~VectorDatatype(void);
     VectorDatatype* clone();
 
+    DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
     int getSize();
@@ -174,6 +180,7 @@ public:
     virtual ~HVectorDatatype(void);
     HVectorDatatype* clone();
 
+    DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
     int getSize();
@@ -213,6 +220,7 @@ public:
     virtual ~IndexedBlockDatatype(void);
     IndexedBlockDatatype* clone();
 
+    DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
     int getSize();
@@ -253,6 +261,7 @@ public:
     virtual ~HIndexedDatatype(void);
     HIndexedDatatype* clone();
 
+    DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
     int getSize();
@@ -288,6 +297,7 @@ public:
     virtual ~StructDatatype(void);
     StructDatatype* clone();
 
+    DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
     int getSize();
