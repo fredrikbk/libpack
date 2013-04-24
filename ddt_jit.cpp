@@ -238,6 +238,11 @@ DatatypeName PrimitiveDatatype::getDatatypeName() {
     return PRIMITIVE;
 }
 
+std::vector<Datatype*> PrimitiveDatatype::getSubtypes() {
+    std::vector<Datatype*> subtypes;
+    return subtypes;
+}
+
 int PrimitiveDatatype::getExtent() {
     return this->upper_bound - this->lower_bound;
 }
@@ -356,6 +361,12 @@ void ContiguousDatatype::globalCodegen(llvm::Module *mod) {
 
 DatatypeName ContiguousDatatype::getDatatypeName() {
     return CONTIGUOUS;
+}
+
+std::vector<Datatype*> ContiguousDatatype::getSubtypes() {
+    std::vector<Datatype*> subtypes;
+    subtypes.push_back(this->basetype);
+    return subtypes;
 }
 
 int ContiguousDatatype::getExtent() {
@@ -489,6 +500,12 @@ void VectorDatatype::globalCodegen(llvm::Module *mod) {
 
 DatatypeName VectorDatatype::getDatatypeName() {
     return VECTOR;
+}
+
+std::vector<Datatype*> VectorDatatype::getSubtypes() {
+    std::vector<Datatype*> subtypes;
+    subtypes.push_back(this->basetype);
+    return subtypes;
 }
 
 int VectorDatatype::getExtent() {
@@ -635,6 +652,12 @@ void HVectorDatatype::globalCodegen(llvm::Module *mod) {
 
 DatatypeName HVectorDatatype::getDatatypeName() {
     return HVECTOR;
+}
+
+std::vector<Datatype*> HVectorDatatype::getSubtypes() {
+    std::vector<Datatype*> subtypes;
+    subtypes.push_back(this->basetype);
+    return subtypes;
 }
 
 int HVectorDatatype::getExtent() {
@@ -786,6 +809,12 @@ DatatypeName IndexedBlockDatatype::getDatatypeName() {
     return INDEXEDBLOCK;
 }
 
+std::vector<Datatype*> IndexedBlockDatatype::getSubtypes() {
+    std::vector<Datatype*> subtypes;
+    subtypes.push_back(this->basetype);
+    return subtypes;
+}
+
 int IndexedBlockDatatype::getExtent() {
     return this->upper_bound - this->lower_bound;
 }
@@ -871,8 +900,6 @@ HIndexedDatatype::HIndexedDatatype(int count, int* blocklen, long* displ, Dataty
     this->true_upper_bound = this->upper_bound;
     this->true_lower_bound = this->lower_bound;
 
-
-
 }
 
 HIndexedDatatype::~HIndexedDatatype(void) {
@@ -906,6 +933,12 @@ void HIndexedDatatype::globalCodegen(llvm::Module *mod) {
 
 DatatypeName HIndexedDatatype::getDatatypeName() {
     return HINDEXED;
+}
+
+std::vector<Datatype*> HIndexedDatatype::getSubtypes() {
+    std::vector<Datatype*> subtypes;
+    subtypes.push_back(this->basetype);
+    return subtypes;
 }
 
 int HIndexedDatatype::getExtent() {
@@ -1026,6 +1059,10 @@ DatatypeName StructDatatype::getDatatypeName() {
     return STRUCT;
 }
 
+std::vector<Datatype*> StructDatatype::getSubtypes() {
+    return this->basetypes;
+}
+
 int StructDatatype::getExtent() {
     return this->upper_bound - this->lower_bound;
 }
@@ -1129,6 +1166,12 @@ void ResizedDatatype::globalCodegen(llvm::Module *mod) {
 
 DatatypeName ResizedDatatype::getDatatypeName() {
     return RESIZED;
+}
+
+std::vector<Datatype*> ResizedDatatype::getSubtypes() {
+    std::vector<Datatype*> subtypes;
+    subtypes.push_back(this->basetype);
+    return subtypes;
 }
 
 int ResizedDatatype::getExtent() {

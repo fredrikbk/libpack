@@ -41,6 +41,7 @@ public:
     virtual int getUpperBound() = 0;
     virtual int getTrueUpperBound() = 0;
     virtual DatatypeName getDatatypeName() = 0;
+    virtual std::vector<Datatype*> getSubtypes() = 0;
 
 
 	virtual std::string toString(bool summary = false) = 0;
@@ -71,6 +72,7 @@ public:
     virtual ~PrimitiveDatatype(void) {};
     PrimitiveDatatype* clone();
 
+    std::vector<Datatype*> getSubtypes();
     DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
@@ -104,6 +106,7 @@ public:
     virtual ~ContiguousDatatype(void);
     ContiguousDatatype* clone();
 
+    std::vector<Datatype*> getSubtypes();
     DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
@@ -140,6 +143,7 @@ public:
     virtual ~VectorDatatype(void);
     VectorDatatype* clone();
 
+    std::vector<Datatype*> getSubtypes();
     DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
@@ -180,6 +184,7 @@ public:
     virtual ~HVectorDatatype(void);
     HVectorDatatype* clone();
 
+    std::vector<Datatype*> getSubtypes();
     DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
@@ -220,6 +225,7 @@ public:
     virtual ~IndexedBlockDatatype(void);
     IndexedBlockDatatype* clone();
 
+    std::vector<Datatype*> getSubtypes();
     DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
@@ -261,6 +267,7 @@ public:
     virtual ~HIndexedDatatype(void);
     HIndexedDatatype* clone();
 
+    std::vector<Datatype*> getSubtypes();
     DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
@@ -297,6 +304,7 @@ public:
     virtual ~StructDatatype(void);
     StructDatatype* clone();
 
+    std::vector<Datatype*> getSubtypes();
     DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
@@ -333,6 +341,7 @@ public:
     virtual ~ResizedDatatype(void);
     ResizedDatatype* clone();
 
+    std::vector<Datatype*> getSubtypes();
     DatatypeName getDatatypeName();
     int getExtent();
     int getTrueExtent();
