@@ -1156,10 +1156,16 @@ void ResizedDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
                       this->getExtent(), this->getSize(), true);
     }
     else if (basetype->getDatatypeName() == HVECTOR) {
+        Datatype* vec_basetype = this->basetype->getSubtypes().at(0);
+        VectorDatatype* vectype = (VectorDatatype*) this->basetype;
+        codegenVector(inbuf, incount, outbuf, vec_basetype, vectype->getCount(),
+                      vectype->getBlocklen(), vectype->getStride(), 
+                      vec_basetype->getSize() * vectype->getBlocklen(), 
+                      this->getExtent(), this->getSize(), true);
 
     }
     else if (basetype->getDatatypeName() == INDEXEDBLOCK) {
-    
+   
     }
     else if (basetype->getDatatypeName() == HINDEXED) {
 
@@ -1196,10 +1202,16 @@ void ResizedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf)
                       this->getExtent(), this->getSize(), true);
     }
     else if (basetype->getDatatypeName() == HVECTOR) {
-
+        Datatype* vec_basetype = this->basetype->getSubtypes().at(0);
+        VectorDatatype* vectype = (VectorDatatype*) this->basetype;
+        codegenVector(inbuf, incount, outbuf, vec_basetype, vectype->getCount(),
+                      vectype->getBlocklen(), 
+                      vec_basetype->getSize() * vectype->getBlocklen(),
+                      vectype->getStride(), this->getSize(), this->getExtent(),
+                      false);
     }
     else if (basetype->getDatatypeName() == INDEXEDBLOCK) {
-    
+   
     }
     else if (basetype->getDatatypeName() == HINDEXED) {
 
