@@ -1068,6 +1068,106 @@ string StructDatatype::toString(bool summary) {
     return res.str();
 }
 
+
+/* Class ResizedDatatype */
+ResizedDatatype::ResizedDatatype(Datatype* basetype, int lb, int extent) {
+
+    this->basetype = basetype->clone();
+    this->size = basetype->getSize();
+    this->lower_bound = lb;
+    this->true_lower_bound = basetype->getTrueLowerBound();
+    this->upper_bound = lb + extent;
+    this->true_upper_bound = basetype->getTrueUpperBound();
+
+}
+
+ResizedDatatype::~ResizedDatatype(void) {
+    delete basetype;
+}
+
+ResizedDatatype* ResizedDatatype::clone() {
+    ResizedDatatype* t_new = new ResizedDatatype(this->basetype, this->lower_bound, this->upper_bound - this->lower_bound);
+    return t_new;
+}
+
+void ResizedDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
+
+    if (basetype->getDatatypeName() == PRIMITIVE) {
+        codegenPrimitiveResized(inbuf, incount, outbuf, 
+            this->size, 
+            this->upper_bound - this->lower_bound, 
+            PrimitiveDatatype::BYTE);
+    }
+    else {
+        fprintf(stderr, "Wah, this is unimplemented.\n");
+    }
+
+}
+
+void ResizedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
+
+    if (basetype->getDatatypeName() == PRIMITIVE) {
+        codegenPrimitiveResized(inbuf, incount, outbuf, 
+            this->size, 
+            this->upper_bound - this->lower_bound, 
+            PrimitiveDatatype::BYTE);
+    }
+    else {
+        fprintf(stderr, "Wah, this is unimplemented.\n");
+    }
+
+}
+
+Datatype *ResizedDatatype::compress() {
+    Datatype* cbasetype = this->basetype->compress();
+    return new ResizedDatatype(cbasetype, this->lower_bound, this->upper_bound - this->lower_bound);
+}
+
+void ResizedDatatype::globalCodegen(llvm::Module *mod) {
+        basetype->globalCodegen(mod);
+}
+
+DatatypeName ResizedDatatype::getDatatypeName() {
+    return RESIZED;
+}
+
+int ResizedDatatype::getExtent() {
+    return this->upper_bound - this->lower_bound;
+}
+
+int ResizedDatatype::getTrueExtent() {
+    return this->true_upper_bound - this->true_lower_bound;
+}
+
+int ResizedDatatype::getSize() {
+    return this->size;
+}
+
+int ResizedDatatype::getLowerBound() {
+    return this->lower_bound;
+}
+
+int ResizedDatatype::getTrueLowerBound() {
+    return this->lower_bound;
+}
+
+int ResizedDatatype::getUpperBound() {
+    return this->upper_bound;
+}
+
+int ResizedDatatype::getTrueUpperBound() {
+    return this->true_upper_bound;
+}
+
+string ResizedDatatype::toString(bool summary) {
+    stringstream res;
+    string sep = (summary) ? ";" : " ";
+    res << "resized(" << this->lower_bound << "," << this->upper_bound - this->lower_bound << ")";
+    res << "[" << this->basetype->toString(summary) << "]";
+    return res.str();
+}
+
+
 void DDT_Commit(Datatype* ddt) {
 #if DDT_OUTPUT
     ddt->print();

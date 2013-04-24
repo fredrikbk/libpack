@@ -12,6 +12,8 @@
 #include <llvm/IR/Value.h>
 
 using namespace llvm;
+#include <stdio.h>
+
 
 #if !PACKVAR
 #undef PACKVAR
@@ -325,6 +327,56 @@ void codegenPrimitive(Value* inbuf, Value* incount, Value* outbuf,
 
     }
 }
+
+void codegenPrimitiveResized(Value* inbuf, Value* incount, Value* outbuf,
+                      int size, int extent, PrimitiveDatatype::PrimitiveType type) {
+
+    Function* TheFunction = Builder.GetInsertBlock()->getParent();
+
+    // loop over incount
+    BasicBlock *header = Builder.GetInsertBlock();
+    BasicBlock *copyloop = BasicBlock::Create(getGlobalContext(), "copyloop", TheFunction);
+    Builder.CreateBr(copyloop);
+    Builder.SetInsertPoint(copyloop);
+
+    PHINode *inphi = Builder.CreatePHI(LLVM_INT8PTR, 2, "in");
+    PHINode *outphi  = Builder.CreatePHI(LLVM_INT8PTR, 2, "out");
+    PHINode *incntphi  = Builder.CreatePHI(LLVM_INT32, 2, "incntphi");
+ 
+    outphi->addIncoming(outbuf, header);
+    inphi->addIncoming(inbuf, header);
+    incntphi->addIncoming(incount, header);
+
+    Builder.CreateMemCpy(outphi, inphi, size, 1);
+
+    // inbuf += extent
+    Value* in_addr_cvi = Builder.CreatePtrToInt(inphi, LLVM_INT64);
+    Value* in_addr_cvi_next = Builder.CreateAdd(in_addr_cvi, Builder.getInt64(extent));
+    Value* inbuf_next = Builder.CreateIntToPtr(in_addr_cvi_next, LLVM_INT8PTR);
+
+    // outbuf += size
+    Value* out_addr_cvi = Builder.CreatePtrToInt(outphi, LLVM_INT64);
+    Value* out_addr_cvi_next = Builder.CreateAdd(out_addr_cvi, Builder.getInt64(size));
+    Value* outbuf_next = Builder.CreateIntToPtr(out_addr_cvi_next, LLVM_INT8PTR);
+
+    // incount -= 1
+    Value* incount_next = Builder.CreateSub(incntphi, Builder.getInt32(1));
+
+
+    inphi->addIncoming(inbuf_next, copyloop);
+    outphi->addIncoming(outbuf_next, copyloop);
+    incntphi->addIncoming(incount_next, copyloop);
+
+    // Create and jump to postamble
+    BasicBlock *copypostamble =
+        BasicBlock::Create(getGlobalContext(), "copypostamble", TheFunction);
+    Value *exitval = constNode((int) 0);
+    Value *exitcond = Builder.CreateICmpEQ(incount_next, exitval);
+    Builder.CreateCondBr(exitcond, copypostamble, copyloop);
+    Builder.SetInsertPoint(copypostamble);
+
+}
+
 
 /* Value* PrimitiveDatatype::Codegen_Pack_partial(Value* inbuf, Value* incount, Value* outbuf, Value* outbuf_from, Value* outbuf_to) {
 

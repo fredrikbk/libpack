@@ -326,6 +326,41 @@ private:
     std::vector<Datatype*> basetypes;
 };
 
+/* Class for resized types */
+class ResizedDatatype : public Datatype {
+public:
+    ResizedDatatype(Datatype* basetype, int lb, int extent);
+    virtual ~ResizedDatatype(void);
+    ResizedDatatype* clone();
+
+    DatatypeName getDatatypeName();
+    int getExtent();
+    int getTrueExtent();
+    int getSize();
+    int getLowerBound();
+    int getTrueLowerBound();
+    int getUpperBound();
+    int getTrueUpperBound();
+
+    std::string toString(bool summary = false);
+
+    Datatype *compress();
+    void packCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void unpackCodegen(llvm::Value* inbuf, llvm::Value* incount, llvm::Value* outbuf);
+    void globalCodegen(llvm::Module *mod);
+
+private:
+    int size;
+    int lower_bound;
+    int upper_bound;
+    int true_lower_bound;
+    int true_upper_bound;
+
+    Datatype* basetype;
+};
+
+
+
 
 /* FARC Library Functions */
 void DDT_Init();

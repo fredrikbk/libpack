@@ -25,6 +25,10 @@ void codegenPrimitive(llvm::Value* inbuf, llvm::Value* incount,
                       llvm::Value* outbuf, int size, 
                       PrimitiveDatatype::PrimitiveType type);
 
+void codegenPrimitiveResized(llvm::Value* inbuf, llvm::Value* incount,
+                      llvm::Value* outbuf, int size, int extent, 
+                      PrimitiveDatatype::PrimitiveType type);
+
 void codegenContiguous(llvm::Value* inbuf, llvm::Value* incount,
                        llvm::Value* outbuf, Datatype *basetype,
                        int elemstride_in, int elemstride_out,
