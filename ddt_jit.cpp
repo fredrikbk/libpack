@@ -449,14 +449,18 @@ VectorDatatype* VectorDatatype::clone() {
 
 void VectorDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenVector(inbuf, incount, outbuf, this->basetype, this->count,
-                  this->blocklen, this->basetype->getExtent() * this->stride,
-                  this->basetype->getSize() * this->blocklen, true);
+                  this->blocklen, 
+                  this->basetype->getExtent() * this->stride,
+                  this->basetype->getSize() * this->blocklen,
+                  this->getExtent(), this->getSize(), true);
 }
 
 void VectorDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
     codegenVector(inbuf, incount, outbuf, this->basetype, this->count,
-                  this->blocklen, this->basetype->getSize() * this->blocklen,
-                  this->basetype->getExtent() * this->stride, false);
+                  this->blocklen, 
+                  this->basetype->getSize() * this->blocklen,
+                  this->basetype->getExtent() * this->stride, 
+                  this->getSize(), this->getExtent(), false);
 }
 
 Datatype *VectorDatatype::compress() {
@@ -602,13 +606,15 @@ HVectorDatatype::~HVectorDatatype(void) {
 }
 
 void HVectorDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenVector(inbuf, incount, outbuf, this->basetype, this->count, this->blocklen,
-            this->stride, this->basetype->getSize() * this->blocklen, true);
+    codegenVector(inbuf, incount, outbuf, this->basetype, this->count,
+                  this->blocklen, this->stride, this->basetype->getSize() * this->blocklen, 
+                  this->getExtent(), this->getSize(), true);
 }
 
 void HVectorDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf) {
-    codegenVector(inbuf, incount, outbuf, this->basetype, this->count, this->blocklen,
-            this->basetype->getSize() * this->blocklen, this->stride, false);
+    codegenVector(inbuf, incount, outbuf, this->basetype, this->count,
+                  this->blocklen, this->basetype->getSize() * this->blocklen, 
+                  this->stride, this->getSize(), this->getExtent(), false);
 }
 
 Datatype *HVectorDatatype::compress() {
@@ -1142,7 +1148,12 @@ void ResizedDatatype::packCodegen(Value* inbuf, Value* incount, Value* outbuf) {
                           true);
     }
     else if (basetype->getDatatypeName() == VECTOR) {
-    
+        Datatype* vec_basetype = this->basetype->getSubtypes().at(0);
+        VectorDatatype* vectype = (VectorDatatype*) this->basetype;
+        codegenVector(inbuf, incount, outbuf, vec_basetype, vectype->getCount(),
+                      vectype->getBlocklen(), vec_basetype->getExtent()*vectype->getStride(),
+                      vec_basetype->getSize() * vectype->getBlocklen(), 
+                      this->getExtent(), this->getSize(), true);
     }
     else if (basetype->getDatatypeName() == HVECTOR) {
 
@@ -1177,7 +1188,12 @@ void ResizedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf)
                           true);
     }
     else if (basetype->getDatatypeName() == VECTOR) {
-    
+        Datatype* vec_basetype = this->basetype->getSubtypes().at(0);
+        VectorDatatype* vectype = (VectorDatatype*) this->basetype;
+        codegenVector(inbuf, incount, outbuf, vec_basetype, vectype->getCount(),
+                      vectype->getBlocklen(), vec_basetype->getExtent()*vectype->getStride(),
+                      vec_basetype->getSize() * vectype->getBlocklen(), 
+                      this->getExtent(), this->getSize(), true);
     }
     else if (basetype->getDatatypeName() == HVECTOR) {
 

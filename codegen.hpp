@@ -37,7 +37,7 @@ void codegenContiguous(llvm::Value* inbuf, llvm::Value* incount,
 void codegenVector(llvm::Value *inbuf, llvm::Value *incount,
                    llvm::Value *outbuf, Datatype *basetype, int count,
                    int blocklen, int elemstride_in, int elemstride_out,
-                   bool pack);
+                   int inptr_inc, int outptr_inc, bool pack);
 
 void codegenIndexedBlock(llvm::Value *compactbuf, llvm::Value *scatteredbuf,
                          llvm::Value* incount, int extent, int size,

@@ -8,6 +8,7 @@
 #include "codegen.hpp"
 #include "codegen_common.hpp"
 #include "ddt_jit.hpp"
+#include <stdio.h>
 
 #include <llvm/IR/Value.h>
 
@@ -29,7 +30,9 @@ namespace farc {
 
 void codegenVector(Value* inbuf, Value* incount, Value* outbuf,
                    Datatype* basetype, int count, int blocklen,
-                   int elemstride_in, int elemstride_out, bool pack) {
+                   int elemstride_in, int elemstride_out, 
+                   int extent, int size, bool pack) {
+
     Function *TheFunction = Builder.GetInsertBlock()->getParent();
 
     // Entry block
@@ -57,11 +60,11 @@ void codegenVector(Value* inbuf, Value* incount, Value* outbuf,
     Value* nextin1 = NULL;
     Value* nextout1 = NULL;
     if (pack) {
-        nextout1 = Builder.CreateAdd(out1, constNode(count * (long)elemstride_out));
+        nextout1 = Builder.CreateAdd(out1, constNode((long) size));
 		nextout1->setName("nextout1");
     } 
     else {
-        nextin1 = Builder.CreateAdd(in1, constNode(count * (long)elemstride_in));
+        nextin1 = Builder.CreateAdd(in1, constNode((long) extent));
 		nextin1->setName("nextin1");
     }
 
@@ -83,11 +86,9 @@ void codegenVector(Value* inbuf, Value* incount, Value* outbuf,
     Value* in2_addr = Builder.CreateIntToPtr(in2, LLVM_INT8PTR);
     in2_addr->setName("in2_addr");
     
-
     // Basetype Code Generation
     if (pack) basetype->packCodegen(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
     else      basetype->unpackCodegen(in2_addr, ConstantInt::get(getGlobalContext(), APInt(32, blocklen, false)), out2_addr);
-
 
     // Increment out2 and in2
     Value* nextout2 = Builder.CreateAdd(out2, constNode((long)elemstride_out));
@@ -112,12 +113,12 @@ void codegenVector(Value* inbuf, Value* incount, Value* outbuf,
 
     // Move the the extend-stride ptr back Extent(Basetype) * Stride - Size(Basetype) * Blocklen  
     if (pack) {
-        nextin1 = Builder.CreateAdd(in1, constNode((long)(elemstride_in * (count-1) + elemstride_out)));
+        nextin1 = Builder.CreateAdd(in1, constNode((long) extent ));
 	    nextin1->setName("nextin1");
     }
     else {
-	nextout1 = Builder.CreateAdd(out1, constNode((long)(elemstride_out * (count-1) + elemstride_in)));
-	nextout1->setName("nextout1");
+	    nextout1 = Builder.CreateAdd(out1, constNode((long) size ));
+	    nextout1->setName("nextout1");
     }
     
     // Increment outer loop index
