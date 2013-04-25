@@ -1197,9 +1197,9 @@ void ResizedDatatype::unpackCodegen(Value* inbuf, Value* incount, Value* outbuf)
         Datatype* vec_basetype = this->basetype->getSubtypes().at(0);
         VectorDatatype* vectype = (VectorDatatype*) this->basetype;
         codegenVector(inbuf, incount, outbuf, vec_basetype, vectype->getCount(),
-                      vectype->getBlocklen(), vec_basetype->getExtent()*vectype->getStride(),
-                      vec_basetype->getSize() * vectype->getBlocklen(), 
-                      this->getExtent(), this->getSize(), true);
+                      vectype->getBlocklen(), vec_basetype->getSize() * vectype->getBlocklen(),
+                      vec_basetype->getExtent() * vectype->getStride(), 
+                      this->getSize(), this->getExtent(), false);
     }
     else if (basetype->getDatatypeName() == HVECTOR) {
         Datatype* vec_basetype = this->basetype->getSubtypes().at(0);
