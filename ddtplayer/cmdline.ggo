@@ -1,0 +1,11 @@
+package "ddtplayer"
+version "0.1"
+purpose "benchmarking of pack functions"
+usage "<usage>"
+
+option "inputfile"   - "input filename"                                      string typestr="filename"
+option "time_create" - "meassure ddt create and commit time"                                             optional
+option "time_hot"    - "meassure pack-time when packed data is in cache"                                 optional
+option "time_cold"   - "meassure pack-time when packed data is not in cache"                             optional
+
+

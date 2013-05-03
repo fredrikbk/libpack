@@ -10,16 +10,13 @@ LDLIBS=$(shell llvm-config --libs all)
 LDFLAGS=$(shell llvm-config --ldflags) #-dynamic
 CPPFLAGS=-DHRT_ARCH=2 -O3 $(shell llvm-config --cppflags) -I/usr/include/mpi -I$(FARCDIR) -I$(FARCDIR)/copy_benchmark/hrtimer
 
-OBJECTS=lex.yy.o parser.tab.o $(FARCDIR)/libfarc.a
+OBJECTS=cmdline.o ddtplayer.o lex.yy.o parser.tab.o cmdline.o $(FARCDIR)/libfarc.a
 
-ddtplayer: $(OBJECTS)
+ddtplayer: $(OBJECTS) 
 	$(MPICXX) -o $@ $^ $(LDFLAGS) $(LDLIBS) 
 
 $(FARCDIR)/libfarc.a: $(FARCDIR)/*.cpp $(FARCDIR)/*.hpp
 	make -C $(FARCDIR) libfarc.a
-
-%.o: %.cpp
-	$(CXX) -c -o $@ $< $(CPPFLAGS)
 
 parser.tab.cpp parser.tab.hpp: parser.ypp
 	bison -d $<
@@ -27,6 +24,9 @@ parser.tab.cpp parser.tab.hpp: parser.ypp
 lex.yy.c: lexer.flex parser.tab.cpp
 	flex $<
 
+cmdline.h cmdline.c: cmdline.ggo
+	gengetopt < cmdline.ggo
+
 clean:
-	rm -f ddtplayer *.o  *.tab.cpp *.tab.hpp lex.yy.c
+	rm -f ddtplayer *.o  *.tab.cpp *.tab.hpp lex.yy.c cmdline.h cmdline.c
 
