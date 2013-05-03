@@ -53,8 +53,6 @@ static PrimitiveDatatype farc_char(PrimitiveDatatype::CHAR);
 //TODO add other primitive types here
 
 static inline MPI_Datatype datatype_handle_create() {
-    //TODO There seems to be a bug here - we have to check if there is actually an entry in the freelist left,
-    //otherwise insert into g_types_fallback!
 
     if (! g_types_freelist.empty()) {
         MPI_Datatype ddt = (MPI_Datatype)g_types_freelist.front();
