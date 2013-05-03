@@ -10,7 +10,7 @@ LLVM_OUTPUT ?= 0
 
 CONFIGVARS = -DPACKVAR=$(PACKVAR) -DLLVM_OUTPUT=$(LLVM_OUTPUT)
 
-FARC= ddt_jit.o codegen_common.o codegen_primitive.o codegen_contiguous.o codegen_vector.o codegen_indexed.o
+FARC= ddt_jit.o codegen_common.o codegen_primitive.o codegen_contiguous.o codegen_vector.o codegen_indexed.o pack.o
 
 LDLIBS+=$(shell llvm-config --libs all)
 LDFLAGS+=$(shell llvm-config --ldflags)

@@ -51,8 +51,8 @@ int LPK_Struct(int count, int blocklens[], LPK_Aint displacements[], LPK_Datatyp
 int LPK_Free(LPK_Datatype *ddt);
 
 int LPK_Compile(LPK_Datatype *ddt);
-int LPK_Compile_pack(LPK_Datatype *ddt);
-int LPK_Compile_unpack(LPK_Datatype *ddt);
+//int LPK_Compile_pack(LPK_Datatype *ddt);
+//int LPK_Compile_unpack(LPK_Datatype *ddt);
 
 int LPK_Pack(void* inbuf, int incount, LPK_Datatype intype, void* outbuf);
 int LPK_Unpack(void* inbuf, void* outbuf, int outcount, LPK_Datatype outtype);
